@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* Estilos para dispositivos móveis */
+    @media screen and (max-width: 768px) {
+      #cstrFreePlayerDiv {
+        width: 100%;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+    }
+
+    /* Estilos para desktop ou tela ampla */
+    @media screen and (min-width: 769px) {
+      #cstrFreePlayerDiv {
+        width: 300px; /* Ajuste o tamanho conforme necessário */
+        height: auto; /* Mantenha a altura automática para manter a proporção */
+        margin: 0 auto; /* Centralizar horizontalmente */
+      }
+    }
+  </style>
+  <link rel="apple-touch-icon" sizes="180x180" href="/sbfi/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/sbfi/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/sbfi/favicon-16x16.png">
+  <link rel="manifest" href="/sbfi/site.webmanifest">
+  <link rel="mask-icon" href="/sbfi/safari-pinned-tab.svg" color="#5bbad5">
+  <link rel="shortcut icon" href="/sbfi/favicon.ico">
+  <meta name="msapplication-TileColor" content="#da532c">
+  <meta name="msapplication-config" content="/sbfi/browserconfig.xml">
+  <meta name="theme-color" content="#ffffff">
+</head>
+<body>
+  <script type='text/javascript'>
+    var cstrFreePlayerUid = 581763;
+    var cstrFreePlayerTheme = 'blue';
+    var cstrFreePlayerColor = '';
+  </script>
+  <script type='text/javascript' src='//corscdn.caster.fm/freeplayer/FreePlanPlayerEmbed.js'></script>
+  <!--   NÃO REMOVA OS LINKS ABAIXO, ELES AJUDARÃO MUITO   -->
+  <a id='cstrFreePlayerBL1' href='//www.caster.fm/'>Free Shoutcast Hosting</a><a id='cstrFreePlayerBL2' href='//www.caster.fm/'>Radio Stream Hosting</a>
+  <div id='cstrFreePlayerDiv'></div>
+</body>
+
+</html>
