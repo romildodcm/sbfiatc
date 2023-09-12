@@ -47,7 +47,9 @@ main {
   font-size: 14px;
 }
 
-
+marquee {
+  font-size: small;
+}
 
 /* Estilos para a tabela */
 table {
