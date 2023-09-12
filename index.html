@@ -1,70 +1,21 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    /* Estilos para dispositivos móveis */
-    @media screen and (max-width: 768px) {
-      #cstrFreePlayerDiv {
-        width: 100%;
-        height: 100vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
 
-    /* Estilos para desktop ou tela ampla */
-    @media screen and (min-width: 769px) {
-      #cursor-airplane {
-        display: block !important;
-      }
+    <link rel="apple-touch-icon" sizes="180x180" href="/sbfi/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/sbfi/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/sbfi/favicon-16x16.png">
+    <link rel="manifest" href="/sbfi/site.webmanifest">
+    <link rel="mask-icon" href="/sbfi/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="shortcut icon" href="/sbfi/favicon.ico">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="msapplication-config" content="/sbfi/browserconfig.xml">
+    <meta name="theme-color" content="#ffffff">
 
-      #cstrFreePlayerDiv {
-        width: 300px;
-        /* Ajuste o tamanho conforme necessário */
-        height: auto;
-        /* Mantenha a altura automática para manter a proporção */
-        margin: 0 auto;
-        /* Centralizar horizontalmente */
-      }
-    }
-
-    @media (prefers-color-scheme: light) {
-      .background-theme {
-        background: #FFF;
-      }
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .background-theme {
-        background: #333;
-      }
-    }
-
-    .background-theme {
-      background: #fefefe;
-    }
-
-    #cursor-airplane {
-      display: none;
-      position: absolute;
-      z-index: 9999;
-      pointer-events: none;
-      transform: translate(-50%, 100%);
-      transition: all 0.1s ease;
-    }
-  </style>
-  <link rel="apple-touch-icon" sizes="180x180" href="/sbfi/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/sbfi/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/sbfi/favicon-16x16.png">
-  <link rel="manifest" href="/sbfi/site.webmanifest">
-  <link rel="mask-icon" href="/sbfi/safari-pinned-tab.svg" color="#5bbad5">
-  <link rel="shortcut icon" href="/sbfi/favicon.ico">
-  <meta name="msapplication-TileColor" content="#da532c">
-  <meta name="msapplication-config" content="/sbfi/browserconfig.xml">
-  <meta name="theme-color" content="#ffffff">
+    <title>IGU/SBFI ATC</title>
 </head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-77CSXLKNXG"></script>
@@ -75,56 +26,149 @@
 
   gtag('config', 'G-77CSXLKNXG');
 </script>
+<body>
+    <header>
+      <div class="header-content">
+          <!-- <img src="logo.png" alt="IGU/SBFI ATC"> -->
+          <h1>IGU/SBFI ATC</h1>
+      </div>
+    </header>
 
-<body class="background-theme relative"
-  style="display: flex; align-items: center; justify-content: center; min-width: 100vw; min-height: 100vh; overflow: hidden;">
-  <svg id="cursor-airplane" style="display: absolute" xmlns="http://www.w3.org/2000/svg" width="32" height="32"
-    fill="#da532c" viewBox="0 0 256 256">
-    <path
-      d="M185.33,114.21l29.14-27.42.17-.17a32,32,0,0,0-45.26-45.26c0,.06-.11.11-.17.17L141.79,70.67l-83-30.2a8,8,0,0,0-8.39,1.86l-24,24a8,8,0,0,0,1.22,12.31l63.89,42.59L76.69,136H56a8,8,0,0,0-5.65,2.34l-24,24A8,8,0,0,0,29,175.42l36.82,14.73,14.7,36.75.06.16a8,8,0,0,0,13.18,2.47l23.87-23.88A8,8,0,0,0,120,200V179.31l14.76-14.76,42.59,63.89a8,8,0,0,0,12.31,1.22l24-24a8,8,0,0,0,1.86-8.39Zm-.07,97.23-42.59-63.88A8,8,0,0,0,136.8,144c-.27,0-.53,0-.79,0a8,8,0,0,0-5.66,2.35l-24,24A8,8,0,0,0,104,176v20.69L90.93,209.76,79.43,181A8,8,0,0,0,75,176.57l-28.74-11.5L59.32,152H80a8,8,0,0,0,5.66-2.34l24-24a8,8,0,0,0-1.22-12.32L44.56,70.74l13.5-13.49,83.22,30.26a8,8,0,0,0,8.56-2L180.78,52.6A16,16,0,0,1,203.4,75.23l-32.87,30.93a8,8,0,0,0-2,8.56l30.26,83.22Z">
-    </path>
-  </svg>
-  <script type='text/javascript'>
-    var cstrFreePlayerUid = 581763;
-    var cstrFreePlayerTheme = 'blue';
-    var cstrFreePlayerColor = '';
-  </script>
-  <script>
-    const body = document.querySelector('body');
-    const cursorElement = document.getElementById('cursor-airplane');
+    <main>
+        <div class="centralized">
+          <script type="text/javascript">var cstrFreePlayerUid = 581763;var cstrFreePlayerTheme = "yellow";var cstrFreePlayerColor = "";</script>
+          <script type="text/javascript" src="//corscdn.caster.fm/freeplayer/FreePlanPlayerEmbed.js"></script>
+          <!--   DO NOT REMOVE THE LINKS BELOW, THEY  WILL BE HIDDEN (AND WILL HELP US A LOT)   -->
+          <a id="cstrFreePlayerBL1" href="//www.caster.fm/">Free Shoutcast Hosting</a><a id="cstrFreePlayerBL2" href="//www.caster.fm/">Radio Stream Hosting</a>
+          <div id="cstrFreePlayerDiv"></div>
+        </div>
 
-    const getTheme = () => {
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark'
-      } else {
-        return 'light'
-      }
-    }
-    const theme = getTheme()
-    theme === 'dark' ? body.style.backgroundColor = '#333' : body.style.backgroundColor = '#FFF'
-
-    // get the current cursor X and Y
-    const getCursorXY = (e) => {
-      const x = e.clientX
-      const y = e.clientY
-      return { x, y }
-    }
-
-    const moveTheCursor = (x, y) => {
-      cursorElement.style.top = `${y}px`;
-      cursorElement.style.left = `${x}px`;
-    }
-    document.addEventListener('mousemove', (e) => {
-      const { x, y } = getCursorXY(e)
-      moveTheCursor(x, y)
-    })
-  </script>
-  <script type='text/javascript' src='//corscdn.caster.fm/freeplayer/FreePlanPlayerEmbed.js'></script>
-  <!--   NÃO REMOVA OS LINKS ABAIXO, ELES AJUDARÃO MUITO   -->
-  <a id='cstrFreePlayerBL1' href='//www.caster.fm/'>Free Shoutcast Hosting</a><a id='cstrFreePlayerBL2'
-    href='//www.caster.fm/'>Radio Stream Hosting</a>
-  <div id='cstrFreePlayerDiv'></div>
-
+        <div class="centralized-justifytext">
+            <p>Transmissão online da fonia na região de IGU/SBFI, por ser uma região trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
+            <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES and IGR/SARI airports and their respective ACCs.</p>
+        </div>
+        <table class="centralized">
+          <tr>
+              <th>Name</th>
+              <th>Frequency</th>
+          </tr>
+          <tr>
+              <td>Emergency/SOS</td>
+              <td>121.500</td>
+          </tr>
+          <tr>
+              <td>TWR SBFI</td>
+              <td>118.800</td>
+          </tr>
+          <tr>
+              <td>APP SBFI</td>
+              <td>120.300</td>
+          </tr>
+          <tr>
+              <td>APP SBFI</td>
+              <td>119.150</td>
+          </tr>
+          <tr>
+              <td>APP SBFI</td>
+              <td>129.100</td>
+          </tr>
+          <tr>
+              <td>UNICOM/Free</td>
+              <td>123.450</td>
+          </tr>
+          <tr>
+              <td>Free</td>
+              <td>123.400</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 2</td>
+              <td>135.900</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 2</td>
+              <td>123.725</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 16</td>
+              <td>124.900</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 16</td>
+              <td>133.800</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 17</td>
+              <td>125.800</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 17</td>
+              <td>127.200</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 18</td>
+              <td>124.775</td>
+          </tr>
+          <tr>
+              <td>ACC CWB Sector 18</td>
+              <td>135.000</td>
+          </tr>
+          <tr>
+              <td>SBCA/CAC AFIS</td>
+              <td>131.850</td>
+          </tr>
+          <tr>
+              <td>SBTD/TOW AFIS</td>
+              <td>131.050</td>
+          </tr>
+          <tr>
+              <td>GND SGES</td>
+              <td>121.700</td>
+          </tr>
+          <tr>
+              <td>APP/TWR SGES</td>
+              <td>119.300</td>
+          </tr>
+          <tr>
+              <td>APP SGES</td>
+              <td>120.600</td>
+          </tr>
+          <tr>
+              <td>TWR SGES</td>
+              <td>118.100</td>
+          </tr>
+          <tr>
+              <td>TWR SGIB Itaipu</td>
+              <td>118.500</td>
+          </tr>
+          <tr>
+              <td>ACC Asuncion</td>
+              <td>128.400</td>
+          </tr>
+          <tr>
+              <td>ACC Asuncion</td>
+              <td>124.100</td>
+          </tr>
+          <tr>
+              <td>APP/TWR SARI</td>
+              <td>120.700</td>
+          </tr>
+          <tr>
+              <td>APP/TWR SARI</td>
+              <td>118.300</td>
+          </tr>
+          <tr>
+              <td>ACC Resistencia</td>
+              <td>134.300</td>
+          </tr>
+          <tr>
+              <td>ACC Resistencia</td>
+              <td>125.750</td>
+          </tr>
+      </table>
+    </main>
+    <footer>
+        <p class="copyright">Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
+    </footer>
+    <script src="script.js"></script>
 </body>
-
 </html>
