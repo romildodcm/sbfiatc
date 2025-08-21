@@ -33,6 +33,9 @@ main {
 .centralized {
   text-align: center;
   margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 
@@ -91,4 +94,70 @@ footer {
 a {
   color: white;
   text-decoration: none;
+}
+
+/* Estilos para o player de áudio */
+.audio-player {
+  background-color: #333;
+  border: 2px solid #444;
+  /* border-radius: 5px; */
+  padding: 20px;
+  margin: 20px auto;
+  min-width: 280px;
+  max-width: 400px;
+  width: fit-content;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.audio-player h3 {
+  margin-top: 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.audio-player audio {
+  width: 100%;
+  margin: 5px 0 5px 0;
+}
+
+.player-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+#status {
+  font-weight: bold;
+  color: #ddd;
+}
+
+/* Cores específicas para estados via classes */
+.status-playing {
+  color: #ffda0a !important;
+}
+.status-connecting {
+  color: #ff9800 !important;
+}
+.status-error {
+  color: #f44336 !important;
+}
+
+/* Responsividade para o player */
+@media screen and (max-width: 768px) {
+  .audio-player {
+    min-width: 260px;
+    max-width: 90%;
+    margin: 20px auto;
+  }
+}
+
+@media screen and (max-width: 400px) {
+  .audio-player {
+    min-width: 240px;
+    max-width: 95%;
+    /* padding: 20px; */
+    margin: 20px auto;
+  }
 }

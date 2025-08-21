@@ -36,19 +36,24 @@
 
     <main>
         <div class="centralized">
-          <script type="text/javascript">var cstrFreePlayerUid = 581763;var cstrFreePlayerTheme = "yellow";var cstrFreePlayerColor = "";</script>
-          <script type="text/javascript" src="//corscdn.caster.fm/freeplayer/FreePlanPlayerEmbed.js"></script>
-          <!--   DO NOT REMOVE THE LINKS BELOW, THEY  WILL BE HIDDEN (AND WILL HELP US A LOT)   -->
-          <a id="cstrFreePlayerBL1" href="//www.caster.fm/">Free Shoutcast Hosting</a><a id="cstrFreePlayerBL2" href="//www.caster.fm/">Radio Stream Hosting</a>
-          <div id="cstrFreePlayerDiv"></div>
-          <marquee
+          <div class="audio-player">
+            <!-- <h3>Transmissão AO VIVO - IGU/SBFI ATC</h3> -->
+            <audio controls preload="none" id="radioPlayer">
+              <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
+              Seu navegador não suporta o elemento de áudio.
+            </audio>
+            <div class="player-controls">
+              <span id="status">Clique em ▶️ para ouvir</span>
+            </div>
+          </div>
+          <!-- <marquee
           behavior="scroll"
           direction="left"
           onmouseover="this.stop();"
           onmouseout="this.start();"
           >
             Apoie o projeto: pix@romildo.net
-          </marquee>
+          </marquee> -->
         </div>
 
 
