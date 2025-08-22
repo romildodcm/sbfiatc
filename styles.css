@@ -1,3 +1,48 @@
+/* ========================================
+   VARIÁVEIS CSS E RESET - MATERIAL DESIGN 3
+   ======================================== */
+
+:root {
+  /* Material Design 3 Color Tokens - Aviation Theme */
+  --md-sys-color-primary: #1565C0;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #E3F2FD;
+  --md-sys-color-on-primary-container: #0D47A1;
+
+  --md-sys-color-secondary: #37474F;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #ECEFF1;
+  --md-sys-color-on-secondary-container: #263238;
+
+  --md-sys-color-surface: #F8F9FA;
+  --md-sys-color-on-surface: #212529;
+  --md-sys-color-surface-variant: #E9ECEF;
+  --md-sys-color-on-surface-variant: #495057;
+
+  --md-sys-color-error: #D32F2F;
+  --md-sys-color-on-error: #ffffff;
+
+  /* Aviation specific colors */
+  --aviation-green: #4CAF50;
+  --aviation-amber: #FF9800;
+  --aviation-blue: #2196F3;
+  --radar-green: #00E676;
+  --tower-orange: #FF5722;
+
+  /* Custom variables for ATC theme */
+  --accent-color: #2196F3;
+  --secondary-color: #FF9800;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --border-radius: 12px;
+  --max-content-width: 800px;
+}* {
+  box-sizing: border-box;
+}
+
+/* ========================================
+   ESTILOS GLOBAIS
+   ======================================== */
+
 body {
   font-family: "Roboto", sans-serif;
   margin: 0;
@@ -7,180 +52,44 @@ body {
   align-items: center;
   text-align: center;
   position: relative;
-}
-
-header {
-  background-color: #333;
-  width: 100%;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-header h1 {
-  /* margin: 0; */
-  /* font-size: 1.8em; */
-  color: #ffda0a;
-}
-
-/* Estilos para o conteúdo principal */
-main {
-  padding: 20px;
-  /* width: 100%; */
-  flex: 1; /* Ocupa o espaço restante */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}
-
-.centralized {
-  text-align: center;
-  margin-bottom: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-
-.centralized-justifytext {
-  text-align: justify;
-  margin-bottom: 20px;
-  max-width: 700px;
-}
-
-.english {
-  font-style: italic;
-  font-size: 14px;
-}
-
-marquee {
-  font-size: small;
-}
-
-/* Estilos para a tabela */
-table {
-  width: fit-content;
-  border-collapse: collapse;
-  margin-bottom: 20px;
-  font-size: small;
-}
-
-table, th, td {
-  border: 1px solid #333;
-}
-
-th, td {
-  padding: 4px 8px;
-  text-align: left;
-}
-
-footer {
-  background-color: #333;
-  color: white;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-.copyright {
-  font-size: 14px;
-}
-
-@media screen and (max-width: 768px) {
-  .centralized {
-      margin-left: 5%;
-      margin-right: 5%;
-  }
+  min-height: 100vh;
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
 }
 
 a {
-  color: white;
+  color: var(--md-sys-color-primary);
   text-decoration: none;
 }
 
-/* Estilos para o player de áudio */
-.audio-player {
-  background-color: #fafafa;
-  /* border: 2px solid #444; */
-  border-radius: 5px; /* cantos quadrados */
-  padding: 10;
-  margin: 30px auto;
-  min-width: 280px;
-  max-width: 400px;
-  width: fit-content;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  overflow: hidden;
-}
+/* ========================================
+   LAYOUT PRINCIPAL - MATERIAL DESIGN 3
+   ======================================== */
 
-.audio-player h3 {
-  margin-top: 0;
-  color: #fff;
-  font-size: 18px;
-}
-
-.audio-player audio {
+header {
+  background-color: var(--md-sys-color-primary);
   width: 100%;
-  margin: 5px 0 5px 0;
-  display: block;
-  border-radius: 0; /* tenta forçar controles quadrados */
-  background: transparent;
-  -webkit-appearance: none;
-  appearance: none;
+  box-shadow: var(--shadow);
+  padding: 1rem 0;
 }
 
-/* Tentar remover cantos arredondados dos controles nativos (WebKit/Chromium) */
-audio::-webkit-media-controls-panel,
-audio::-webkit-media-controls-enclosure {
-  border-radius: 0 !important;
-  background-color: #fafafa;
-  overflow: hidden;
-}
-audio::-webkit-media-controls-play-button,
-audio::-webkit-media-controls-timeline,
-audio::-webkit-media-controls-volume-slider,
-audio::-webkit-media-controls-mute-button {
-  border-radius: 0 !important;
-  background-color: #fafafa;
+header h1 {
+  color: var(--md-sys-color-on-primary);
+  margin: 0;
+  text-align: center;
 }
 
-/* Firefox tem suporte limitado para estilização de controles nativos */
-audio::-moz-media-controls {
-  border-radius: 0 !important;
-  background-color: #fafafa;
-}
-
-/* Fallback: se quiser total controle visual em todos os navegadores,
-   implemente controles customizados (HTML/CSS/JS) em vez do atributo controls */
-
-#status {
-  font-weight: bold;
-  color: #333;
-}
-
-/* Cores específicas para estados via classes */
-.status-playing {
-  color: #ffda0a !important;
-}
-.status-connecting {
-  color: #ff9800 !important;
-}
-.status-error {
-  color: #f44336 !important;
-}
-
-/* Responsividade para o player */
-@media screen and (max-width: 768px) {
-  .audio-player {
-    min-width: 260px;
-    max-width: 90%;
-    margin: 20px auto;
-  }
-}
-
-@media screen and (max-width: 400px) {
-  .audio-player {
-    min-width: 240px;
-    max-width: 95%;
-    /* padding: 20px; */
-    margin: 20px auto;
-  }
+main {
+  padding: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  max-width: var(--max-content-width);
+  gap: 24px;
+  padding-bottom: 80px; /* Espaço para o footer fixo */
 }
 
 footer {
@@ -188,10 +97,290 @@ footer {
   left: 0;
   right: 0;
   bottom: 0;
-  line-height: 56px;
-  /* background: #222; ajuste conforme desejado */
-  color: #fff;
+  background-color: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface-variant);
   z-index: 1000;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  text-align: center;
+}
+
+/* ========================================
+   CARDS E COMPONENTES MATERIAL
+   ======================================== */
+
+.audio-card,
+.info-card {
+  width: 100%;
+  max-width: 600px;
+  --md-elevated-card-container-color: var(--md-sys-color-surface);
+}
+
+.card-content {
+  padding: 24px;
+}
+
+/* ========================================
+   PLAYER DE ÁUDIO MATERIAL DESIGN
+   ======================================== */
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.station-info h2 {
+  margin: 0 0 4px 0;
+  color: var(--md-sys-color-primary);
+}
+
+.station-info p {
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.live-indicator {
+  color: var(--tower-orange);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--md-sys-color-surface-variant);
+  border-radius: 16px;
+  margin-bottom: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.play-button {
+  --md-filled-icon-button-container-size: 64px;
+  --md-filled-icon-button-icon-size: 32px;
+  --md-filled-icon-button-container-color: var(--md-sys-color-primary);
+  --md-filled-icon-button-icon-color: var(--md-sys-color-on-primary);
+  flex-shrink: 0;
+}
+
+.player-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-container {
+  position: relative;
+}
+
+.connection-progress {
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  --md-linear-progress-track-color: transparent;
+  --md-linear-progress-active-indicator-color: var(--aviation-blue);
+  height: 2px;
+  border-radius: 1px;
+}
+
+.frequency-info {
+  color: var(--md-sys-color-on-surface-variant);
+  margin: 0;
+  display: none; /* Removido conforme solicitado */
+}
+
+.volume-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.volume-slider {
+  flex: 1;
+  --md-slider-handle-color: var(--aviation-blue);
+  --md-slider-active-track-color: var(--aviation-blue);
+  --md-slider-inactive-track-color: var(--md-sys-color-outline);
+}
+
+/* Estados do player */
+.player-playing .play-button {
+  --md-filled-icon-button-container-color: var(--aviation-green);
+  --md-filled-icon-button-icon-color: #ffffff;
+}
+
+.player-connecting .connection-progress {
+  display: block !important;
+}
+
+.player-error .play-button {
+  --md-filled-icon-button-container-color: var(--md-sys-color-error);
+}
+
+/* Status específicos */
+#status {
+  margin: 0;
+  font-weight: 500;
+}
+
+.status-playing {
+  color: var(--aviation-green) !important;
+  font-weight: 600;
+}
+
+.status-connecting {
+  color: var(--aviation-amber) !important;
+}
+
+.status-error {
+  color: var(--md-sys-color-error) !important;
+}
+
+/* ========================================
+   DRAWER DE FREQUÊNCIAS
+   ======================================== */
+
+/* Removido - não é mais necessário */
+
+/* ========================================
+   ESTADOS DO STATUS
+   ======================================== */
+
+.status-playing {
+  color: var(--md-sys-color-primary) !important;
+}
+
+.status-connecting {
+  color: var(--secondary-color) !important;
+}
+
+.status-error {
+  color: var(--md-sys-color-error) !important;
+}
+
+/* ========================================
+   ESTILOS ESPECÍFICOS
+   ======================================== */
+
+.info-card .card-content p {
+  text-align: justify;
+  line-height: 1.6;
+}
+
+.english {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.copyright {
+  margin: 0;
+}
+
+.copyright a {
+  color: var(--md-sys-color-primary);
+  text-decoration: underline;
+}
+
+/* Material Icons customization */
+md-icon {
+  font-family: 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ========================================
+   MEDIA QUERIES
+   ======================================== */
+
+@media screen and (max-width: 768px) {
+  main {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .card-content {
+    padding: 16px;
+  }
+}@media screen and (max-width: 400px) {
+  main {
+    padding: 8px;
+  }
+}
+
+/* ========================================
+   MELHORIAS VISUAIS ADICIONAIS
+   ======================================== */
+
+/* Card de áudio com elevation mais sutil */
+.audio-card {
+  --md-elevated-card-container-elevation: 3;
+  transition: all 0.3s ease;
+}
+
+.audio-card:hover {
+  --md-elevated-card-container-elevation: 6;
+}
+
+/* Animação suave para mudanças de estado */
+.player-controls {
+  transition: background-color 0.3s ease;
+}
+
+.player-playing .player-controls {
+  background-color: rgba(76, 175, 80, 0.08);
+}
+
+.player-error .player-controls {
+  background-color: rgba(211, 47, 47, 0.08);
+}
+
+/* Melhoria no layout responsivo do player */
+@media screen and (max-width: 480px) {
+  .player-controls {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .volume-controls {
+    justify-content: center;
+    min-width: auto;
+  }
+
+  .player-info {
+    text-align: center;
+  }
+}
+
+/* Efeito visual para o botão play quando ativo */
+.play-button:active {
+  transform: scale(0.95);
+}
+
+/* Player nativo escondido */
+#radioPlayer {
+  display: none;
 }
 
 
