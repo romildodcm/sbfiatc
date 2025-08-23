@@ -383,5 +383,129 @@ md-icon {
   display: none;
 }
 
+/* ========================================
+   MODAL ADICIONAR À TELA INICIAL
+   ======================================== */
+
+.add-to-home-modal {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.4) 0%, transparent 100%);
+  padding: 0 16px 16px 16px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  pointer-events: none;
+}
+
+.add-to-home-modal.show {
+  transform: translateY(0);
+  pointer-events: all;
+}
+
+.add-to-home-content {
+  background-color: var(--md-sys-color-surface);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.add-to-home-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  background-color: var(--md-sys-color-primary-container);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-to-home-icon md-icon {
+  color: var(--md-sys-color-on-primary-container);
+  font-size: 24px;
+}
+
+.add-to-home-text {
+  flex: 1;
+  text-align: left;
+}
+
+.add-to-home-text h3 {
+  margin: 0 0 4px 0;
+  color: var(--md-sys-color-on-surface);
+  font-weight: 500;
+}
+
+.add-to-home-text p {
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.4;
+}
+
+.add-to-home-close {
+  flex-shrink: 0;
+  --md-icon-button-icon-color: var(--md-sys-color-on-surface-variant);
+}
+
+.add-to-home-close:hover {
+  --md-icon-button-state-layer-color: var(--md-sys-color-on-surface);
+}
+
+/* Animação de entrada suave */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.add-to-home-modal.animate-in {
+  animation: slideUp 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+}
+
+/* Responsividade para telas menores */
+@media screen and (max-width: 480px) {
+  .add-to-home-modal {
+    padding: 0 12px 12px 12px;
+  }
+  
+  .add-to-home-content {
+    padding: 16px;
+    gap: 12px;
+  }
+  
+  .add-to-home-icon {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .add-to-home-icon md-icon {
+    font-size: 20px;
+  }
+  
+  .add-to-home-text h3 {
+    font-size: 16px;
+  }
+  
+  .add-to-home-text p {
+    font-size: 14px;
+  }
+}
+
 
 
