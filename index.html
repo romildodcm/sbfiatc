@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
   <!-- Configurações anti-cache para stream de áudio -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -22,7 +22,7 @@
   </script>
   <script type="module">
     import '@material/web/all.js';
-    import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+    import { styles as typescaleStyles } from '@material/web/typography/md-typescale-styles.js';
     document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
   </script>
 
@@ -32,11 +32,6 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/sbfi/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/sbfi/favicon-16x16.png">
   <link rel="manifest" href="/sbfi/site.webmanifest">
-  <link rel="mask-icon" href="/sbfi/safari-pinned-tab.svg" color="#5bbad5">
-  <link rel="shortcut icon" href="/sbfi/favicon.ico">
-  <meta name="msapplication-TileColor" content="#da532c">
-  <meta name="msapplication-config" content="/sbfi/browserconfig.xml">
-  <meta name="theme-color" content="#ffffff">
 
   <title>IGU/SBFI ATC</title>
 </head>
@@ -76,7 +71,8 @@
 
           <div class="player-info">
             <div class="status-container">
-              <md-linear-progress id="connectionProgress" class="connection-progress" indeterminate style="display: none;"></md-linear-progress>
+              <md-linear-progress id="connectionProgress" class="connection-progress" indeterminate
+                style="display: none;"></md-linear-progress>
               <p class="md-typescale-body-medium" id="status">Sistema disponível</p>
             </div>
           </div>
@@ -85,13 +81,7 @@
             <md-icon-button id="volumeButton">
               <md-icon>volume_up</md-icon>
             </md-icon-button>
-            <md-slider
-              id="volumeSlider"
-              class="volume-slider"
-              min="0"
-              max="100"
-              value="100"
-              disabled>
+            <md-slider id="volumeSlider" class="volume-slider" min="0" max="100" value="100" disabled>
             </md-slider>
           </div>
         </div>
@@ -101,16 +91,21 @@
           Seu navegador não suporta o elemento de áudio.
         </audio>
       </div>
-    </md-elevated-card>    <!-- Texto informativo -->
+    </md-elevated-card> <!-- Texto informativo -->
     <md-elevated-card class="info-card">
       <div class="card-content">
-        <p class="md-typescale-body-large">Transmissão online da fonia na região de IGU/SBFI, por ser uma região trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
-        <p class="md-typescale-body-medium english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES and IGR/SARI airports and their respective ACCs.</p>
+        <p class="md-typescale-body-large">Transmissão online da fonia na região de IGU/SBFI, por ser uma região
+          trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos
+          AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
+        <p class="md-typescale-body-medium english">Online transmission of the ATC communication in the IGU/SBFI region,
+          being a tri-national area comprising Brazil, Paraguay, and Argentina, also allows for listening to the
+          communications of AGT/SGES and IGR/SARI airports and their respective ACCs.</p>
       </div>
     </md-elevated-card>
   </main>
   <footer>
-    <p class="md-typescale-body-small copyright">Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
+    <p class="md-typescale-body-small copyright">Copyright &copy; by <a
+        href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
   </footer>
   <script src="script.js"></script>
 </body>
