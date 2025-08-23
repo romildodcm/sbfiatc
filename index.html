@@ -1,9 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Configurações anti-cache para stream de áudio -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <!-- Material Web Components -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "@material/web/": "https://esm.run/@material/web/"
+      }
+    }
+  </script>
+  <script type="module">
+    import '@material/web/all.js';
+    import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+    document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+  </script>
+
   <link rel="stylesheet" href="styles.css">
 
   <link rel="apple-touch-icon" sizes="180x180" href="/sbfi/apple-touch-icon.png">
@@ -31,163 +53,64 @@
 <body>
   <header>
     <div class="header-content">
-      <!-- <img src="/sbfi/android-chrome-256x256.png" alt="IGU/SBFI ATC" class="site-logo"> -->
-      <h1>IGU/SBFI ATC</h1>
+      <h1 class="md-typescale-headline-large">IGU/SBFI ATC</h1>
     </div>
   </header>
 
   <main>
-    <div class="centralized">
-      <div class="audio-player">
-        <!-- <h3>Transmissão AO VIVO - IGU/SBFI ATC</h3> -->
-        <audio controls preload="none" id="radioPlayer" autoplay>
+    <!-- Card do Player de Áudio -->
+    <md-elevated-card class="audio-card">
+      <div class="card-content">
+        <div class="player-header">
+          <div class="station-info">
+            <h2 class="md-typescale-headline-medium">Transmissão</h2>
+            <p class="md-typescale-body-medium">Controle de Tráfego Aéreo</p>
+          </div>
+          <md-icon class="live-indicator">radio</md-icon>
+        </div>
+
+        <div class="player-controls">
+          <md-filled-icon-button id="playButton" class="play-button">
+            <md-icon>play_arrow</md-icon>
+          </md-filled-icon-button>
+
+          <div class="player-info">
+            <div class="status-container">
+              <md-linear-progress id="connectionProgress" class="connection-progress" indeterminate style="display: none;"></md-linear-progress>
+              <p class="md-typescale-body-medium" id="status">Sistema disponível</p>
+            </div>
+          </div>
+
+          <div class="volume-controls">
+            <md-icon-button id="volumeButton">
+              <md-icon>volume_up</md-icon>
+            </md-icon-button>
+            <md-slider
+              id="volumeSlider"
+              class="volume-slider"
+              min="0"
+              max="100"
+              value="100"
+              disabled>
+            </md-slider>
+          </div>
+        </div>
+
+        <audio id="radioPlayer" preload="none" muted>
           <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
           Seu navegador não suporta o elemento de áudio.
         </audio>
-        <!-- <div class="player-controls">
-              <span id="status">Clique em ▶️ para ouvir</span>
-            </div> -->
       </div>
-      <!-- <marquee
-          behavior="scroll"
-          direction="left"
-          onmouseover="this.stop();"
-          onmouseout="this.start();"
-          >
-            Apoie o projeto: pix@romildo.net
-          </marquee> -->
-    </div>
-
-
-    <div class="centralized-justifytext">
-      <p>Transmissão online da fonia na região de IGU/SBFI, por ser uma região trinacional Brasil-Paraguai-Argentina,
-        nesta fonia também é possível escutar as comunicações dos aeroportos AGT/SGES e IGR/SARI e seus respectivos
-        ACCs.</p>
-      <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national area
-        comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES and
-        IGR/SARI airports and their respective ACCs.</p>
-    </div>
-    <!-- <table class="centralized">
-      <tr>
-        <th>Name</th>
-        <th>Frequency</th>
-      </tr>
-      <tr>
-        <td>Emergency/SOS</td>
-        <td>121.500</td>
-      </tr>
-      <tr>
-        <td>TWR SBFI</td>
-        <td>118.800</td>
-      </tr>
-      <tr>
-        <td>APP SBFI</td>
-        <td>120.300</td>
-      </tr>
-      <tr>
-        <td>APP SBFI</td>
-        <td>119.150</td>
-      </tr>
-      <tr>
-        <td>APP SBFI</td>
-        <td>129.100</td>
-      </tr>
-      <tr>
-        <td>UNICOM/Free</td>
-        <td>123.450</td>
-      </tr>
-      <tr>
-        <td>Free</td>
-        <td>123.400</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 2</td>
-        <td>135.900</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 2</td>
-        <td>123.725</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 16</td>
-        <td>124.900</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 16</td>
-        <td>133.800</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 17</td>
-        <td>125.800</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 17</td>
-        <td>127.200</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 18</td>
-        <td>124.775</td>
-      </tr>
-      <tr>
-        <td>ACC CWB Sector 18</td>
-        <td>135.000</td>
-      </tr>
-      <tr>
-        <td>SBCA/CAC AFIS</td>
-        <td>131.850</td>
-      </tr>
-      <tr>
-        <td>SBTD/TOW AFIS</td>
-        <td>131.050</td>
-      </tr>
-      <tr>
-        <td>GND SGES</td>
-        <td>121.700</td>
-      </tr>
-      <tr>
-        <td>APP/TWR SGES</td>
-        <td>119.300</td>
-      </tr>
-      <tr>
-        <td>APP SGES</td>
-        <td>120.600</td>
-      </tr>
-      <tr>
-        <td>TWR SGES</td>
-        <td>118.100</td>
-      </tr>
-      <tr>
-        <td>TWR SGIB Itaipu</td>
-        <td>118.500</td>
-      </tr>
-      <tr>
-        <td>ACC Asuncion</td>
-        <td>128.400</td>
-      </tr>
-      <tr>
-        <td>ACC Asuncion</td>
-        <td>124.100</td>
-      </tr>
-      <tr>
-        <td>APP/TWR SARI</td>
-        <td>120.700</td>
-      </tr>
-      <tr>
-        <td>APP/TWR SARI</td>
-        <td>118.300</td>
-      </tr>
-      <tr>
-        <td>ACC Resistencia</td>
-        <td>134.300</td>
-      </tr>
-      <tr>
-        <td>ACC Resistencia</td>
-        <td>125.750</td>
-      </tr>
-    </table> -->
+    </md-elevated-card>    <!-- Texto informativo -->
+    <md-elevated-card class="info-card">
+      <div class="card-content">
+        <p class="md-typescale-body-large">Transmissão online da fonia na região de IGU/SBFI, por ser uma região trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
+        <p class="md-typescale-body-medium english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES and IGR/SARI airports and their respective ACCs.</p>
+      </div>
+    </md-elevated-card>
   </main>
   <footer>
-    <p class="copyright">Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
+    <p class="md-typescale-body-small copyright">Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
   </footer>
   <script src="script.js"></script>
 </body>
