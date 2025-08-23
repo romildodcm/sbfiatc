@@ -305,4 +305,74 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Falha ao registrar Service Worker:', error);
             });
     }
+
+    // ========================================
+    // MODAL ADICIONAR À TELA INICIAL
+    // ========================================
+    
+    const addToHomeModal = document.getElementById('addToHomeModal');
+    const closeAddToHomeModal = document.getElementById('closeAddToHomeModal');
+    
+    // Verificar se é um dispositivo móvel
+    function isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+    
+    // Verificar se já está instalado como PWA
+    function isStandalone() {
+        return window.matchMedia('(display-mode: standalone)').matches || 
+               window.navigator.standalone === true;
+    }
+    
+    // Verificar se o modal já foi mostrado (usando localStorage)
+    function hasSeenAddToHomePrompt() {
+        return localStorage.getItem('addToHomePromptShown') === 'true';
+    }
+    
+    // Marcar como já mostrado
+    function markAddToHomePromptShown() {
+        localStorage.setItem('addToHomePromptShown', 'true');
+    }
+    
+    // Mostrar o modal
+    function showAddToHomeModal() {
+        addToHomeModal.style.display = 'block';
+        // Pequeno delay para a animação funcionar
+        setTimeout(() => {
+            addToHomeModal.classList.add('show');
+        }, 50);
+    }
+    
+    // Esconder o modal
+    function hideAddToHomeModal() {
+        addToHomeModal.classList.remove('show');
+        setTimeout(() => {
+            addToHomeModal.style.display = 'none';
+        }, 300);
+        markAddToHomePromptShown();
+    }
+    
+    // Event listener para fechar o modal
+    closeAddToHomeModal.addEventListener('click', hideAddToHomeModal);
+    
+    // Fechar modal clicando fora do conteúdo
+    addToHomeModal.addEventListener('click', (e) => {
+        if (e.target === addToHomeModal) {
+            hideAddToHomeModal();
+        }
+    });
+    
+    // Mostrar o modal após 3 segundos se atender as condições
+    setTimeout(() => {
+        if (isMobileDevice() && !isStandalone() && !hasSeenAddToHomePrompt()) {
+            showAddToHomeModal();
+        }
+    }, 3000);
+    
+    // Esconder modal ao pressionar ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && addToHomeModal.classList.contains('show')) {
+            hideAddToHomeModal();
+        }
+    });
 });

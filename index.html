@@ -99,10 +99,41 @@
           AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
         <p class="md-typescale-body-medium english">Online transmission of the ATC communication in the IGU/SBFI region,
           being a tri-national area comprising Brazil, Paraguay, and Argentina, also allows for listening to the
+    <!-- Modal Adicionar à Tela Inicial -->
+    <div id="addToHomeModal" class="add-to-home-modal">
+      <div class="add-to-home-content">
+        <img src="sbfi/android-chrome-192x192.png" alt="App Icon" class="add-to-home-icon">
+        <span class="add-to-home-text">Adicione este app à tela inicial do seu celular para acesso rápido!</span>
+        <button class="add-to-home-close" onclick="document.getElementById('addToHomeModal').style.display='none'">×</button>
+      </div>
+    </div>
+    <script>
+      // Exibe o modal após 2 segundos
+      setTimeout(function() {
+        document.getElementById('addToHomeModal').style.display = 'flex';
+      }, 2000);
+    </script>
           communications of AGT/SGES and IGR/SARI airports and their respective ACCs.</p>
       </div>
     </md-elevated-card>
   </main>
+
+  <!-- Modal Adicionar à Tela Inicial -->
+  <div id="addToHomeModal" class="add-to-home-modal" style="display: none;">
+    <div class="add-to-home-content">
+      <div class="add-to-home-icon">
+        <md-icon>phone_android</md-icon>
+      </div>
+      <div class="add-to-home-text">
+        <h3 class="md-typescale-title-medium">Adicionar à tela inicial</h3>
+        <p class="md-typescale-body-medium">Tenha acesso rápido ao ATC direto da sua tela inicial</p>
+      </div>
+      <md-icon-button id="closeAddToHomeModal" class="add-to-home-close">
+        <md-icon>close</md-icon>
+      </md-icon-button>
+    </div>
+  </div>
+
   <footer>
     <p class="md-typescale-body-small copyright">Copyright &copy; by <a
         href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
