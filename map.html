@@ -15,6 +15,7 @@
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 
   <link rel="apple-touch-icon" sizes="180x180" href="/sbfi/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/sbfi/favicon-32x32.png">
@@ -47,6 +48,18 @@
       --radar-text-dim: rgba(0, 255, 65, 0.6);
       --radar-panel-bg: rgba(10, 10, 10, 0.92);
       --radar-border: rgba(0, 255, 65, 0.3);
+    }
+
+    [data-theme="red"] {
+      --radar-green: #ff3333;
+      --radar-green-dim: #cc2828;
+      --radar-green-faint: rgba(255, 51, 51, 0.15);
+      --radar-green-glow: rgba(255, 51, 51, 0.4);
+      --radar-ring: rgba(255, 51, 51, 0.25);
+      --radar-text: #ff3333;
+      --radar-text-dim: rgba(255, 51, 51, 0.6);
+      --radar-panel-bg: rgba(10, 5, 5, 0.92);
+      --radar-border: rgba(255, 51, 51, 0.3);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -153,18 +166,21 @@
     }
 
     /* Ocultar controles padrão do Leaflet */
-    .leaflet-control-zoom {
+    .leaflet-control-zoom,
+    .leaflet-bar {
       border: 1px solid var(--radar-border) !important;
     }
 
-    .leaflet-control-zoom a {
+    .leaflet-control-zoom a,
+    .leaflet-bar a {
       background: var(--radar-panel-bg) !important;
       color: var(--radar-green) !important;
       border-color: var(--radar-border) !important;
     }
 
-    .leaflet-control-zoom a:hover {
-      background: rgba(0, 255, 65, 0.1) !important;
+    .leaflet-control-zoom a:hover,
+    .leaflet-bar a:hover {
+      background: var(--radar-green-faint) !important;
     }
 
     .leaflet-control-attribution {
@@ -272,7 +288,7 @@
       font-size: 11px !important;
       padding: 6px 10px !important;
       border-radius: 2px !important;
-      box-shadow: 0 0 12px rgba(0, 255, 65, 0.2) !important;
+      box-shadow: 0 0 12px var(--radar-green-faint) !important;
       line-height: 1.5;
     }
 
@@ -291,7 +307,7 @@
       border-radius: 4px !important;
       color: var(--radar-green) !important;
       font-family: 'Roboto Mono', monospace !important;
-      box-shadow: 0 0 20px rgba(0, 255, 65, 0.15) !important;
+      box-shadow: 0 0 20px var(--radar-green-faint) !important;
     }
 
     .leaflet-popup-tip {
@@ -353,12 +369,12 @@
     }
 
     .audio-panel .play-btn:hover {
-      background: rgba(0, 255, 65, 0.1);
+      background: var(--radar-green-faint);
       box-shadow: 0 0 12px var(--radar-green-glow);
     }
 
     .audio-panel .play-btn.playing {
-      background: rgba(0, 255, 65, 0.15);
+      background: var(--radar-green-faint);
       box-shadow: 0 0 12px var(--radar-green-glow);
     }
 
@@ -501,13 +517,13 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid rgba(0, 255, 65, 0.08);
+      border-bottom: 1px solid var(--radar-green-faint);
       cursor: pointer;
       transition: background 0.15s;
     }
 
     .aircraft-item:hover {
-      background: rgba(0, 255, 65, 0.08);
+      background: var(--radar-green-faint);
     }
 
     .aircraft-item .callsign {
@@ -575,7 +591,7 @@
     }
 
     .toggle-panel-btn:hover {
-      background: rgba(0, 255, 65, 0.1);
+      background: var(--radar-green-faint);
       box-shadow: 0 0 8px var(--radar-green-glow);
     }
 
@@ -672,7 +688,7 @@
     }
 
     .map-action-btn:hover {
-      background: rgba(0, 255, 65, 0.1);
+      background: var(--radar-green-faint);
       box-shadow: 0 0 8px var(--radar-green-glow);
     }
 
@@ -733,8 +749,11 @@
     <button class="map-action-btn" id="resetViewBtn" title="Visão geral (SBFI)">
       <span class="material-icons">my_location</span>
     </button>
-    <button class="map-action-btn" id="fullscreenBtn" title="Tela cheia">
-      <span class="material-icons">fullscreen</span>
+    <button class="map-action-btn" id="themeToggleBtn" title="Tema noturno (vermelho)">
+      <span class="material-icons">nightlight</span>
+    </button>
+    <button class="map-action-btn" id="bordersToggleBtn" title="Mostrar fronteiras">
+      <span class="material-icons">public</span>
     </button>
   </div>
 
@@ -788,6 +807,20 @@
     // CONFIGURAÇÃO
     // ==========================================
     const SBFI = { lat: -25.5963, lng: -54.4854 };
+
+    // Tema — cores dinâmicas para elementos JS (canvas/SVG)
+    function getThemeColors() {
+      const isRed = document.documentElement.getAttribute('data-theme') === 'red';
+      return {
+        main:      isRed ? '#ff3333' : '#00ff41',
+        dim:       isRed ? '#cc2828' : '#00cc33',
+        ring:      isRed ? 'rgba(255, 51, 51, 0.2)' : 'rgba(0, 255, 65, 0.2)',
+        ringDyn:   isRed ? 'rgba(255, 51, 51, 0.15)' : 'rgba(0, 255, 65, 0.15)',
+        cross:     isRed ? 'rgba(255, 51, 51, 0.4)' : 'rgba(0, 255, 65, 0.4)',
+        textGlow:  isRed ? 'rgba(255,51,51,0.6)' : 'rgba(0,255,65,0.6)',
+        textDim:   isRed ? 'rgba(255,51,51,0.55)' : 'rgba(0,255,65,0.55)',
+      };
+    }
     const MAX_RANGE_KM = 400;
     const REFRESH_INTERVAL_MS = 10000; // 10 segundos
 
@@ -805,6 +838,10 @@
     let currentEndpoint = ADSB_ENDPOINTS.opensky;
     let aircraftMarkers = {};
     let map, rangeGroup, aircraftGroup;
+    let bordersLayer = null;
+    let bordersVisible = false;
+    let bordersCache = {};  // { '110m': geojson, '50m': geojson, '10m': geojson }
+    let currentBordersRes = null;
     let refreshTimer = null;
 
     // ==========================================
@@ -941,7 +978,7 @@
           return `rgb(${r},${g},${b})`;
         }
       }
-      return '#00ff41';
+      return getThemeColors().main;
     }
 
     // ==========================================
@@ -1038,8 +1075,176 @@
       rangeGroup = L.layerGroup().addTo(map);
       aircraftGroup = L.layerGroup().addTo(map);
 
+      // Fronteiras de países (Natural Earth 110m via TopoJSON)
+      drawCountryBorders();
+
       drawRangeRings();
       drawAirportMarkers();
+
+      // Fullscreen control (topleft, below zoom)
+      const FullscreenControl = L.Control.extend({
+        options: { position: 'topleft' },
+        onAdd: function () {
+          const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+          const link = L.DomUtil.create('a', '', container);
+          link.id = 'fullscreenBtn';
+          link.href = '#';
+          link.title = 'Tela cheia';
+          link.role = 'button';
+          link.innerHTML = '<span class="material-icons" style="font-size:18px;line-height:30px;">fullscreen</span>';
+          L.DomEvent.disableClickPropagation(container);
+          L.DomEvent.on(link, 'click', L.DomEvent.preventDefault);
+          return container;
+        }
+      });
+      map.addControl(new FullscreenControl());
+    }
+
+    // ==========================================
+    // FRONTEIRAS DE PAÍSES (resolução progressiva)
+    // ==========================================
+    // Bounding box do radar para clip
+    const BORDERS_BBOX = {
+      minLat: SBFI.lat - 5, maxLat: SBFI.lat + 5,
+      minLng: SBFI.lng - 6, maxLng: SBFI.lng + 6
+    };
+    const TARGET_COUNTRY_IDS = new Set(['076', '600', '032']); // BR, PY, AR
+
+    // Resolução por zoom
+    function getBordersResolution() {
+      const z = map.getZoom();
+      if (z >= 10) return '10m';
+      if (z >= 8) return '50m';
+      return '110m';
+    }
+
+    const BORDERS_URLS = {
+      '110m': 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json',
+      '50m':  'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json',
+      '10m':  'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json'
+    };
+
+    function clipCoords(coords) {
+      // Filtra pontos fora do bbox (simplificação rápida)
+      return coords.filter(c => {
+        const lng = c[0], lat = c[1];
+        return lat >= BORDERS_BBOX.minLat && lat <= BORDERS_BBOX.maxLat &&
+               lng >= BORDERS_BBOX.minLng && lng <= BORDERS_BBOX.maxLng;
+      });
+    }
+
+    function clipGeometry(geom) {
+      if (geom.type === 'Polygon') {
+        const clipped = geom.coordinates.map(ring => clipCoords(ring)).filter(r => r.length >= 3);
+        return clipped.length ? { type: 'Polygon', coordinates: clipped } : null;
+      }
+      if (geom.type === 'MultiPolygon') {
+        const polys = geom.coordinates
+          .map(poly => poly.map(ring => clipCoords(ring)).filter(r => r.length >= 3))
+          .filter(poly => poly.length > 0);
+        return polys.length ? { type: 'MultiPolygon', coordinates: polys } : null;
+      }
+      return geom;
+    }
+
+    function fetchAndCacheBorders(res) {
+      if (bordersCache[res]) return Promise.resolve(bordersCache[res]);
+      return fetch(BORDERS_URLS[res])
+        .then(r => r.json())
+        .then(world => {
+          const all = topojson.feature(world, world.objects.countries);
+          const features = all.features
+            .filter(f => TARGET_COUNTRY_IDS.has(f.id))
+            .map(f => {
+              const clipped = clipGeometry(f.geometry);
+              return clipped ? { ...f, geometry: clipped } : null;
+            })
+            .filter(Boolean);
+          const fc = { type: 'FeatureCollection', features };
+          bordersCache[res] = fc;
+          return fc;
+        });
+    }
+
+    function updateBordersLayer() {
+      if (!bordersVisible) return;
+      const res = getBordersResolution();
+      if (res === currentBordersRes && bordersLayer) return; // já está na resolução certa
+
+      fetchAndCacheBorders(res).then(fc => {
+        // Pode ter trocado de estado enquanto o fetch rodava
+        if (!bordersVisible) return;
+        if (bordersLayer) map.removeLayer(bordersLayer);
+        const tc = getThemeColors();
+        bordersLayer = L.geoJSON(fc, {
+          style: { color: tc.ringDyn, weight: 1, fill: false, interactive: false, dashArray: '6 4' },
+          interactive: false
+        }).addTo(map);
+        bordersLayer.bringToBack();
+        currentBordersRes = res;
+      }).catch(() => {});
+    }
+
+    // Labels de países (posicionados sobre as áreas visíveis no radar)
+    const COUNTRY_LABELS = [
+      { name: 'BRASIL',    lat: -24.5, lng: -53.5 },
+      { name: 'PARAGUAI',  lat: -24.8, lng: -55.5 },
+      { name: 'ARGENTINA', lat: -27.5, lng: -55.0 },
+    ];
+    let countryLabelMarkers = [];
+
+    function showCountryLabels() {
+      if (countryLabelMarkers.length) return; // já exibidos
+      const tc = getThemeColors();
+      COUNTRY_LABELS.forEach(c => {
+        const marker = L.marker([c.lat, c.lng], {
+          icon: L.divIcon({
+            className: 'country-label',
+            html: `<span style="color:${tc.textDim};font-size:13px;font-weight:700;letter-spacing:4px;font-family:'Roboto Mono',monospace;text-shadow:0 0 6px rgba(0,0,0,0.9);">${c.name}</span>`,
+            iconSize: [120, 20],
+            iconAnchor: [60, 10]
+          }),
+          interactive: false
+        }).addTo(map);
+        countryLabelMarkers.push(marker);
+      });
+    }
+
+    function hideCountryLabels() {
+      countryLabelMarkers.forEach(m => map.removeLayer(m));
+      countryLabelMarkers = [];
+    }
+
+    function updateCountryLabelColors() {
+      if (!countryLabelMarkers.length) return;
+      hideCountryLabels();
+      showCountryLabels();
+    }
+
+    function showBorders() {
+      bordersVisible = true;
+      updateBordersLayer();
+      showCountryLabels();
+    }
+
+    function hideBorders() {
+      bordersVisible = false;
+      if (bordersLayer) {
+        map.removeLayer(bordersLayer);
+        bordersLayer = null;
+      }
+      currentBordersRes = null;
+      hideCountryLabels();
+    }
+
+    function drawCountryBorders() {
+      if (localStorage.getItem('radar-borders') === 'on') {
+        showBorders();
+      }
+      // Trocar resolução ao mudar zoom
+      map.on('zoomend', () => {
+        if (bordersVisible) updateBordersLayer();
+      });
     }
 
     // ==========================================
@@ -1061,7 +1266,7 @@
       fixedDistances.forEach(km => {
         L.circle([SBFI.lat, SBFI.lng], {
           radius: km * 1000,
-          color: 'rgba(0, 255, 65, 0.2)',
+          color: getThemeColors().ring,
           weight: 1,
           fill: false,
           dashArray: km === 400 ? null : '4 6',
@@ -1084,7 +1289,7 @@
       dynamicDistances.forEach(d => {
         const circle = L.circle([SBFI.lat, SBFI.lng], {
           radius: d.km * 1000,
-          color: 'rgba(0, 255, 65, 0.15)',
+          color: getThemeColors().ringDyn,
           weight: 1,
           fill: false,
           dashArray: '3 5',
@@ -1114,12 +1319,12 @@
       L.polyline([
         [SBFI.lat - crossSize, SBFI.lng],
         [SBFI.lat + crossSize, SBFI.lng]
-      ], { color: 'rgba(0, 255, 65, 0.4)', weight: 1, interactive: false }).addTo(rangeGroup);
+      ], { color: getThemeColors().cross, weight: 1, interactive: false }).addTo(rangeGroup);
 
       L.polyline([
         [SBFI.lat, SBFI.lng - crossSize],
         [SBFI.lat, SBFI.lng + crossSize]
-      ], { color: 'rgba(0, 255, 65, 0.4)', weight: 1, interactive: false }).addTo(rangeGroup);
+      ], { color: getThemeColors().cross, weight: 1, interactive: false }).addTo(rangeGroup);
     }
 
     function updateZoomRings() {
@@ -1154,9 +1359,10 @@
 
     function drawAirportMarkers() {
       AIRPORTS.forEach(ap => {
+        const tc = getThemeColors();
         const style = ap.primary
-          ? 'color:#00ff41;font-weight:700;font-size:12px;text-shadow:0 0 8px rgba(0,255,65,0.6);'
-          : 'color:rgba(0,255,65,0.55);font-weight:500;font-size:10px;text-shadow:0 0 4px rgba(0,0,0,0.8);';
+          ? `color:${tc.main};font-weight:700;font-size:12px;text-shadow:0 0 8px ${tc.textGlow};`
+          : `color:${tc.textDim};font-weight:500;font-size:10px;text-shadow:0 0 4px rgba(0,0,0,0.8);`;
         const symbol = ap.primary ? '✦' : '✧';
 
         L.marker([ap.lat, ap.lng], {
@@ -1178,8 +1384,9 @@
 
     function createAircraftIcon(track, acData, zoom) {
       const rotation = track || 0;
+      const acColor = getThemeColors().main;
       const svg = `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${rotation}deg)">
-        <polygon points="10,1 4,18 10,14 16,18" fill="#00ff41" fill-opacity="0.9" stroke="#00ff41" stroke-width="0.5"/>
+        <polygon points="10,1 4,18 10,14 16,18" fill="${acColor}" fill-opacity="0.9" stroke="${acColor}" stroke-width="0.5"/>
       </svg>`;
 
       let labelHtml = '';
@@ -1560,8 +1767,8 @@
             // Criar marcador de localização
             userLocationMarker = L.circleMarker([lat, lng], {
               radius: 7,
-              color: '#00ff41',
-              fillColor: '#00ff41',
+              color: getThemeColors().main,
+              fillColor: getThemeColors().main,
               fillOpacity: 0.7,
               weight: 2
             }).addTo(map);
@@ -1584,9 +1791,72 @@
     }
 
     // ==========================================
+    // TEMA (verde padrão / vermelho noturno)
+    // ==========================================
+    function initThemeToggle() {
+      const btn = document.getElementById('themeToggleBtn');
+      const icon = btn.querySelector('.material-icons');
+
+      btn.addEventListener('click', () => {
+        const isRed = document.documentElement.getAttribute('data-theme') === 'red';
+        if (isRed) {
+          document.documentElement.removeAttribute('data-theme');
+          localStorage.setItem('radar-theme', 'green');
+          icon.textContent = 'nightlight';
+          btn.title = 'Tema noturno (vermelho)';
+        } else {
+          document.documentElement.setAttribute('data-theme', 'red');
+          localStorage.setItem('radar-theme', 'red');
+          icon.textContent = 'light_mode';
+          btn.title = 'Tema padrão (verde)';
+        }
+
+        // Re-desenhar elementos com cores hardcoded no JS
+        redrawThemedElements();
+      });
+    }
+
+    function redrawThemedElements() {
+      // Fronteiras de países
+      if (bordersLayer && bordersVisible) {
+        bordersLayer.setStyle({ color: getThemeColors().ringDyn });
+      }
+      // Labels de países
+      updateCountryLabelColors();
+
+      // Range rings + cruz + aeroportos
+      rangeGroup.clearLayers();
+      zoomRings = [];
+      drawRangeRings();
+      drawAirportMarkers();
+
+      // Re-criar ícones de aeronaves existentes
+      const zoom = map.getZoom();
+      Object.entries(aircraftMarkers).forEach(([icao, marker]) => {
+        const data = marker._acData;
+        if (data) {
+          marker.setIcon(createAircraftIcon(data.track, data, zoom));
+        }
+      });
+
+      // User location marker
+      if (userLocationMarker) {
+        const tc = getThemeColors();
+        userLocationMarker.setStyle({ color: tc.main, fillColor: tc.main });
+      }
+    }
+
+    // ==========================================
     // INICIALIZAÇÃO
     // ==========================================
     document.addEventListener('DOMContentLoaded', () => {
+      // Aplicar tema salvo ANTES de desenhar o mapa
+      const savedTheme = localStorage.getItem('radar-theme');
+      if (savedTheme === 'red') {
+        document.documentElement.setAttribute('data-theme', 'red');
+        document.getElementById('themeToggleBtn').querySelector('.material-icons').textContent = 'light_mode';
+      }
+
       initMap();
       initAudioPlayer();
       initPanelToggle();
@@ -1612,6 +1882,38 @@
       document.getElementById('resetViewBtn').addEventListener('click', () => {
         map.setView([SBFI.lat, SBFI.lng], 7, { animate: true });
         clearTrail();
+      });
+
+      // Theme toggle button
+      initThemeToggle();
+
+      // Borders toggle button
+      const bordersBtn = document.getElementById('bordersToggleBtn');
+      const bordersIcon = bordersBtn.querySelector('.material-icons');
+      // Aplicar estado salvo (padrão: off)
+      if (localStorage.getItem('radar-borders') === 'on') {
+        bordersIcon.textContent = 'public';
+        bordersBtn.title = 'Ocultar fronteiras';
+        bordersBtn.style.opacity = '1';
+      } else {
+        bordersIcon.textContent = 'public_off';
+        bordersBtn.title = 'Mostrar fronteiras';
+        bordersBtn.style.opacity = '0.5';
+      }
+      bordersBtn.addEventListener('click', () => {
+        if (bordersVisible) {
+          hideBorders();
+          localStorage.setItem('radar-borders', 'off');
+          bordersIcon.textContent = 'public_off';
+          bordersBtn.title = 'Mostrar fronteiras';
+          bordersBtn.style.opacity = '0.5';
+        } else {
+          showBorders();
+          localStorage.setItem('radar-borders', 'on');
+          bordersIcon.textContent = 'public';
+          bordersBtn.title = 'Ocultar fronteiras';
+          bordersBtn.style.opacity = '1';
+        }
       });
 
       // Limpar trail ao fechar popup ou clicar no mapa vazio
