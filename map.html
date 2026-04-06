@@ -350,13 +350,21 @@
       color: var(--radar-text-dim);
     }
 
-    /* ========== AIRCRAFT DETAIL (fixed top-left) ========== */
+    /* ========== AIRCRAFT DETAIL (fixed top-left, multi-card) ========== */
     #aircraftDetail {
       display: none;
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 1000;
+      max-height: calc(100vh - 80px);
+      overflow-y: auto;
+      pointer-events: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--radar-border) transparent;
+    }
+    #aircraftDetail.visible { display: flex; flex-direction: column; gap: 6px; }
+    .detail-card {
       background: var(--radar-panel-bg);
       border: 1px solid var(--radar-border);
       border-radius: 4px;
@@ -366,21 +374,21 @@
       line-height: 1.8;
       color: var(--radar-green);
       box-shadow: 0 0 20px var(--radar-green-faint);
-      min-width: 180px;
-      pointer-events: auto;
+      min-width: 140px;
+      max-width: 165px;
+      position: relative;
     }
-    #aircraftDetail.visible { display: block; }
-    #aircraftDetail .callsign {
+    .detail-card .callsign {
       font-size: 14px;
       font-weight: 700;
       border-bottom: 1px solid var(--radar-border);
       padding-bottom: 4px;
       margin-bottom: 4px;
     }
-    #aircraftDetail .label {
+    .detail-card .label {
       color: var(--radar-text-dim);
     }
-    #aircraftDetail .detail-close {
+    .detail-card .detail-close {
       position: absolute;
       top: 4px;
       right: 8px;
@@ -924,6 +932,18 @@
     // TRAIL — COR POR ALTITUDE
     // ==========================================
     function altitudeToColor(altFt) {
+      const isRed = document.documentElement.getAttribute('data-theme') === 'red';
+
+      if (isRed) {
+        // Modo noite: degradê vermelho escuro → vermelho vivo
+        const a = Math.max(0, Math.min(45000, altFt || 0));
+        const t = a / 45000; // 0..1
+        const r = Math.round(80 + t * 175);  // 80 → 255
+        const g = Math.round(0  + t * 30);   //  0 → 30
+        const b = Math.round(0  + t * 20);   //  0 → 20
+        return `rgb(${r},${g},${b})`;
+      }
+
       // 0 ft → roxo, 10000 → azul, 20000 → verde, 30000 → amarelo, 40000+ → vermelho
       const stops = [
         { alt: 0,     r: 148, g: 0,   b: 211 },  // roxo
@@ -959,9 +979,17 @@
     // PAINEL DETALHES DA AERONAVE (fixo top-left)
     // ==========================================
     function showAircraftDetail(a) {
-      const el = document.getElementById('aircraftDetail');
-      el.innerHTML = `
-        <button class="detail-close" onclick="clearTrail()">✕</button>
+      const container = document.getElementById('aircraftDetail');
+      // Atualizar card existente ou criar novo
+      let card = container.querySelector(`.detail-card[data-icao="${a.icao}"]`);
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'detail-card';
+        card.setAttribute('data-icao', a.icao);
+        container.appendChild(card);
+      }
+      card.innerHTML = `
+        <button class="detail-close" onclick="removeAircraftTrail('${a.icao}')">✕</button>
         <div class="callsign">${a.callsign}</div>
         <span class="label">ICAO:</span> ${a.icao}<br>
         <span class="label">ALT:</span> ${a.alt != null ? a.alt.toLocaleString() + ' ft' : '---'}<br>
@@ -971,24 +999,36 @@
         <span class="label">SQK:</span> ${a.squawk || '---'}<br>
         <span class="label">DIST:</span> ${a.distance} km<br>
         <span class="label">GND:</span> ${a.onGround ? 'SIM' : 'NÃO'}`;
-      el.classList.add('visible');
+      container.classList.add('visible');
     }
 
-    function hideAircraftDetail() {
-      const el = document.getElementById('aircraftDetail');
-      el.classList.remove('visible');
+    function hideAircraftDetail(icao) {
+      const container = document.getElementById('aircraftDetail');
+      if (icao) {
+        const card = container.querySelector(`.detail-card[data-icao="${icao}"]`);
+        if (card) card.remove();
+        if (!container.querySelector('.detail-card')) container.classList.remove('visible');
+      } else {
+        container.innerHTML = '';
+        container.classList.remove('visible');
+      }
     }
 
     // ==========================================
     // DESENHAR / LIMPAR TRAIL
     // ==========================================
-    let activeTrailLayers = [];
-    let selectedIcao = null;
+    let trailLayersByIcao = {};
+    let selectedIcaos = new Set();
     let followingIcao = null;
 
     function drawTrail(icao, zoomToAircraft = true) {
-      clearTrail();
-      selectedIcao = icao;
+      // Toggle: se já selecionado, remover
+      if (selectedIcaos.has(icao)) {
+        removeAircraftTrail(icao);
+        return;
+      }
+
+      selectedIcaos.add(icao);
       followingIcao = icao;
 
       // Esconder label do ícone na aeronave selecionada
@@ -1013,6 +1053,29 @@
       fetchTrail(icao);
     }
 
+    function removeAircraftTrail(icao) {
+      // Restaurar label da aeronave
+      if (aircraftMarkers[icao]) {
+        const prev = aircraftMarkers[icao];
+        if (prev._icon) prev._icon.classList.remove('aircraft-selected');
+        const d = prev._acData;
+        if (d && !prev.getTooltip()) {
+          const tip = `${d.callsign}  FL${d.alt ? Math.round(d.alt / 100) : '---'}`;
+          prev.bindTooltip(tip, { permanent: false, direction: 'top', offset: [0, -12], className: 'aircraft-tooltip' });
+        }
+      }
+      // Remover trail layers deste ICAO
+      if (trailLayersByIcao[icao]) {
+        trailLayersByIcao[icao].forEach(l => map.removeLayer(l));
+        delete trailLayersByIcao[icao];
+      }
+      selectedIcaos.delete(icao);
+      hideAircraftDetail(icao);
+      if (followingIcao === icao) {
+        followingIcao = selectedIcaos.size > 0 ? [...selectedIcaos].pop() : null;
+      }
+    }
+
     async function fetchTrail(icao) {
       try {
         const resp = await fetch(`${ADSB_API_BASE}/aircraft/${icao}/trail?minutes=30`);
@@ -1024,16 +1087,18 @@
           alt: p.alt != null ? Number(p.alt) : 0 // já em pés
         }));
         if (trail.length < 2) return;
-        renderTrail(trail);
+        renderTrail(trail, icao);
       } catch (err) {
         console.warn('Erro ao buscar trail:', err.message);
       }
     }
 
-    function renderTrail(trail) {
-
-      // Mostrar legenda
-      // document.getElementById('altLegend').classList.add('visible');
+    function renderTrail(trail, icao) {
+      // Limpar trail anterior deste ICAO (re-draw)
+      if (trailLayersByIcao[icao]) {
+        trailLayersByIcao[icao].forEach(l => map.removeLayer(l));
+      }
+      const layers = [];
 
       // Desenhar segmentos coloridos por altitude
       for (let i = 0; i < trail.length - 1; i++) {
@@ -1047,11 +1112,11 @@
           {
             color: color,
             weight: 2.5,
-            opacity: 0.4 + (i / trail.length) * 0.6, // fade: antigo=fraco, recente=forte
+            opacity: 0.4 + (i / trail.length) * 0.6,
             interactive: false
           }
         ).addTo(map);
-        activeTrailLayers.push(line);
+        layers.push(line);
       }
 
       // Pontos nos vértices do trail
@@ -1065,28 +1130,30 @@
           weight: 0,
           interactive: false
         }).addTo(map);
-        activeTrailLayers.push(circle);
+        layers.push(circle);
       });
+
+      trailLayersByIcao[icao] = layers;
     }
 
     function clearTrail() {
-      // Restaurar label da aeronave anteriormente selecionada
-      if (selectedIcao && aircraftMarkers[selectedIcao]) {
-        const prev = aircraftMarkers[selectedIcao];
-        if (prev._icon) prev._icon.classList.remove('aircraft-selected');
-        // Restaurar tooltip
-        const d = prev._acData;
-        if (d && !prev.getTooltip()) {
-          const tip = `${d.callsign}  FL${d.alt ? Math.round(d.alt / 100) : '---'}`;
-          prev.bindTooltip(tip, { permanent: false, direction: 'top', offset: [0, -12], className: 'aircraft-tooltip' });
+      // Restaurar labels de todas as aeronaves selecionadas
+      selectedIcaos.forEach(icao => {
+        if (aircraftMarkers[icao]) {
+          const prev = aircraftMarkers[icao];
+          if (prev._icon) prev._icon.classList.remove('aircraft-selected');
+          const d = prev._acData;
+          if (d && !prev.getTooltip()) {
+            const tip = `${d.callsign}  FL${d.alt ? Math.round(d.alt / 100) : '---'}`;
+            prev.bindTooltip(tip, { permanent: false, direction: 'top', offset: [0, -12], className: 'aircraft-tooltip' });
+          }
         }
-      }
+      });
       hideAircraftDetail();
-      activeTrailLayers.forEach(l => map.removeLayer(l));
-      activeTrailLayers = [];
-      selectedIcao = null;
+      Object.values(trailLayersByIcao).forEach(layers => layers.forEach(l => map.removeLayer(l)));
+      trailLayersByIcao = {};
+      selectedIcaos.clear();
       followingIcao = null;
-      // document.getElementById('altLegend').classList.remove('visible');
     }
 
     // ==========================================
@@ -1511,15 +1578,15 @@
           const marker = aircraftMarkers[a.icao];
           marker.setLatLng([a.lat, a.lon]);
           marker.setIcon(createAircraftIcon(a.track, a, zoom));
-          if (a.icao === selectedIcao && marker._icon) {
+          if (selectedIcaos.has(a.icao) && marker._icon) {
             marker._icon.classList.add('aircraft-selected');
           }
-          if (a.icao !== selectedIcao) {
+          if (!selectedIcaos.has(a.icao)) {
             marker.setTooltipContent(tooltipContent);
           }
           marker._acData = a;
           // Atualizar painel fixo se esta aeronave está selecionada
-          if (a.icao === selectedIcao) {
+          if (selectedIcaos.has(a.icao)) {
             showAircraftDetail(a);
           }
         } else {
@@ -1533,7 +1600,7 @@
               className: 'aircraft-tooltip'
             })
             .on('click', function () {
-              this.unbindTooltip();
+              if (!selectedIcaos.has(a.icao)) this.unbindTooltip();
               drawTrail(a.icao);
             })
             .addTo(aircraftGroup);
@@ -1543,10 +1610,10 @@
         }
       });
 
-      // Re-desenhar trail ativo se a aeronave ainda existe
-      if (selectedIcao && aircraftMarkers[selectedIcao]) {
-        drawTrail(selectedIcao, false);
-      }
+      // Re-desenhar trails ativos
+      selectedIcaos.forEach(icao => {
+        if (aircraftMarkers[icao]) fetchTrail(icao);
+      });
 
       // Atualizar contadores e lista
       document.getElementById('aircraftCount').textContent = aircraft.length;
@@ -1576,15 +1643,15 @@
         </div>
       `).join('');
 
-      // Click na lista → dá zoom na aeronave e mostra trail
+      // Click na lista → toggle trail da aeronave
       list.querySelectorAll('.aircraft-item').forEach(el => {
         el.addEventListener('click', () => {
           const icao = el.dataset.icao;
           const marker = aircraftMarkers[icao];
-          if (marker) {
+          if (marker && !selectedIcaos.has(icao)) {
             map.setView(marker.getLatLng(), 10, { animate: true });
-            drawTrail(icao);
           }
+          drawTrail(icao);
         });
       });
     }
@@ -1855,7 +1922,7 @@
         const data = marker._acData;
         if (data) {
           marker.setIcon(createAircraftIcon(data.track, data, zoom));
-          if (icao === selectedIcao && marker._icon) {
+          if (selectedIcaos.has(icao) && marker._icon) {
             marker._icon.classList.add('aircraft-selected');
           }
         }
@@ -1954,7 +2021,7 @@
           const a = marker._acData;
           if (a) {
             marker.setIcon(createAircraftIcon(a.track, a, zoom));
-            if (icao === selectedIcao && marker._icon) {
+            if (selectedIcaos.has(icao) && marker._icon) {
               marker._icon.classList.add('aircraft-selected');
             }
           }
