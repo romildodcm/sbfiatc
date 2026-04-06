@@ -259,6 +259,26 @@
       height: 20px;
     }
 
+    /* Beacon pulse effect */
+    @keyframes beacon-pulse {
+      0%   { transform: scale(1);   opacity: 0.7; }
+      100% { transform: scale(2.8); opacity: 0;   }
+    }
+    .aircraft-icon-wrapper::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 10px; height: 10px;
+      margin: -5px 0 0 -5px;
+      border-radius: 50%;
+      background: var(--radar-green);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .aircraft-icon-wrapper.beacon::after {
+      animation: beacon-pulse 0.8s ease-out forwards;
+    }
+
     .aircraft-label {
       position: absolute;
       left: 22px;
@@ -288,7 +308,8 @@
       font-size: 8px;
     }
 
-    .aircraft-selected .aircraft-label {
+    .aircraft-selected .aircraft-label .ac-reg,
+    .aircraft-selected .aircraft-label .ac-detail {
       display: none;
     }
 
@@ -933,46 +954,22 @@
     // ==========================================
     function altitudeToColor(altFt) {
       const isRed = document.documentElement.getAttribute('data-theme') === 'red';
+      const a = Math.max(0, Math.min(45000, altFt || 0));
+      const t = a / 45000; // 0..1
 
       if (isRed) {
         // Modo noite: degradê vermelho escuro → vermelho vivo
-        const a = Math.max(0, Math.min(45000, altFt || 0));
-        const t = a / 45000; // 0..1
         const r = Math.round(80 + t * 175);  // 80 → 255
         const g = Math.round(0  + t * 30);   //  0 → 30
         const b = Math.round(0  + t * 20);   //  0 → 20
         return `rgb(${r},${g},${b})`;
       }
 
-      // 0 ft → roxo, 10000 → azul, 20000 → verde, 30000 → amarelo, 40000+ → vermelho
-      const stops = [
-        { alt: 0,     r: 148, g: 0,   b: 211 },  // roxo
-        { alt: 5000,  r: 0,   g: 100, b: 255 },  // azul
-        { alt: 15000, r: 0,   g: 220, b: 120 },  // verde
-        { alt: 25000, r: 255, g: 220, b: 0   },  // amarelo
-        { alt: 35000, r: 255, g: 100, b: 0   },  // laranja
-        { alt: 45000, r: 255, g: 30,  b: 30  },  // vermelho
-      ];
-
-      const a = Math.max(0, altFt || 0);
-
-      // Achar segmento
-      if (a <= stops[0].alt) return `rgb(${stops[0].r},${stops[0].g},${stops[0].b})`;
-      if (a >= stops[stops.length - 1].alt) {
-        const s = stops[stops.length - 1];
-        return `rgb(${s.r},${s.g},${s.b})`;
-      }
-
-      for (let i = 0; i < stops.length - 1; i++) {
-        if (a >= stops[i].alt && a <= stops[i + 1].alt) {
-          const t = (a - stops[i].alt) / (stops[i + 1].alt - stops[i].alt);
-          const r = Math.round(stops[i].r + (stops[i + 1].r - stops[i].r) * t);
-          const g = Math.round(stops[i].g + (stops[i + 1].g - stops[i].g) * t);
-          const b = Math.round(stops[i].b + (stops[i + 1].b - stops[i].b) * t);
-          return `rgb(${r},${g},${b})`;
-        }
-      }
-      return getThemeColors().main;
+      // Modo verde: degradê verde escuro → verde vivo
+      const r = Math.round(0  + t * 30);   //  0 → 30
+      const g = Math.round(80 + t * 175);  // 80 → 255
+      const b = Math.round(0  + t * 20);   //  0 → 20
+      return `rgb(${r},${g},${b})`;
     }
 
     // ==========================================
@@ -1578,6 +1575,17 @@
           const marker = aircraftMarkers[a.icao];
           marker.setLatLng([a.lat, a.lon]);
           marker.setIcon(createAircraftIcon(a.track, a, zoom));
+          // Beacon pulse
+          requestAnimationFrame(() => {
+            if (marker._icon) {
+              const wrapper = marker._icon.querySelector('.aircraft-icon-wrapper');
+              if (wrapper) {
+                wrapper.classList.remove('beacon');
+                void wrapper.offsetWidth; // reflow
+                wrapper.classList.add('beacon');
+              }
+            }
+          });
           if (selectedIcaos.has(a.icao) && marker._icon) {
             marker._icon.classList.add('aircraft-selected');
           }
@@ -2031,6 +2039,11 @@
       // Refresh periódico
       refreshTimer = setInterval(fetchADSBData, REFRESH_INTERVAL_MS);
     });
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   </script>
 </body>
 
