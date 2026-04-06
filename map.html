@@ -80,6 +80,7 @@
     /* Impedir zoom de pinça nos overlays — gesto passa ao mapa */
     .radar-header,
     .audio-panel,
+    .controls-stack,
     .info-panel,
     .toggle-panel-btn,
     .reset-view-btn,
@@ -157,12 +158,12 @@
       font-family: 'Roboto Mono', monospace;
     }
 
-    /* Zoom controls — canto inferior direito */
+    /* Zoom controls — canto inferior esquerdo (desktop) */
     .leaflet-top.leaflet-left {
       top: auto !important;
-      bottom: 70px !important;
-      left: auto !important;
-      right: 10px !important;
+      bottom: 10px !important;
+      left: 10px !important;
+      right: auto !important;
     }
 
     /* Ocultar controles padrão do Leaflet */
@@ -176,11 +177,19 @@
       background: var(--radar-panel-bg) !important;
       color: var(--radar-green) !important;
       border-color: var(--radar-border) !important;
+      width: 30px !important;
+      height: 30px !important;
+      line-height: 30px !important;
+      font-size: 16px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
     }
 
     .leaflet-control-zoom a:hover,
     .leaflet-bar a:hover {
       background: var(--radar-green-faint) !important;
+      box-shadow: 0 0 8px var(--radar-green-glow) !important;
     }
 
     .leaflet-control-attribution {
@@ -201,7 +210,7 @@
     /* ========== ALTITUDE LEGEND ========== */
     .alt-legend {
       position: fixed;
-      bottom: 70px;
+      bottom: 50px;
       left: 52px;
       z-index: 1000;
       background: var(--radar-panel-bg);
@@ -383,24 +392,31 @@
     }
 
     /* ========== AUDIO PLAYER PANEL ========== */
-    .audio-panel {
+    .controls-stack {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 10px;
+      right: 10px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .audio-panel {
       background: var(--radar-panel-bg);
-      border-top: 1px solid var(--radar-border);
-      padding: 10px 16px;
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+      padding: 8px 12px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      z-index: 1000;
+      gap: 10px;
       backdrop-filter: blur(8px);
     }
 
     .audio-panel .play-btn {
-      width: 40px;
-      height: 40px;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
       border: 1px solid var(--radar-green);
       background: transparent;
@@ -424,7 +440,7 @@
     }
 
     .audio-panel .play-btn .material-icons {
-      font-size: 20px;
+      font-size: 16px;
       color: var(--radar-green);
     }
 
@@ -480,7 +496,7 @@
     }
 
     .volume-control input[type="range"] {
-      width: 80px;
+      width: 60px;
       height: 2px;
       -webkit-appearance: none;
       appearance: none;
@@ -642,7 +658,7 @@
 
     /* ========== RESPONSIVE ========== */
     @media screen and (max-width: 768px) {
-      .header-stats { display: none; }
+      .header-stats { gap: 10px; font-size: 10px; }
 
       .radar-header h1 { font-size: 13px; letter-spacing: 1px; }
 
@@ -673,6 +689,9 @@
         display: flex;
         top: 50px;
         right: 10px;
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
       }
 
       .info-panel-header {
@@ -698,28 +717,17 @@
         width: 50px;
       }
 
-      .audio-info .label { display: none; }
+      .audio-info .label { font-size: 9px; }
 
       .audio-panel { padding: 8px 12px; }
 
-      /* Controles Leaflet (zoom + fullscreen) no mobile */
+      /* Ocultar zoom no mobile */
       .leaflet-top.leaflet-left {
-        bottom: 75px !important;
-        right: 10px !important;
+        display: none !important;
       }
 
-      .leaflet-control-zoom a,
-      .leaflet-bar a {
-        width: 30px !important;
-        height: 30px !important;
-        line-height: 30px !important;
-        font-size: 16px !important;
-      }
-
-      /* Botões de ação do mapa empilhados verticalmente no mobile */
+      /* Botões de ação do mapa empilhados no mobile */
       .map-action-btns {
-        bottom: 75px;
-        left: 10px;
         flex-direction: column;
       }
 
@@ -739,11 +747,8 @@
 
     /* ========== MAP ACTION BUTTONS ========== */
     .map-action-btns {
-      position: fixed;
-      bottom: 70px;
-      left: 10px;
-      z-index: 1000;
       display: flex;
+      flex-direction: column;
       gap: 6px;
     }
 
@@ -751,8 +756,8 @@
       background: var(--radar-panel-bg);
       border: 1px solid var(--radar-border);
       color: var(--radar-green);
-      width: 36px;
-      height: 36px;
+      width: 30px;
+      height: 30px;
       border-radius: 4px;
       cursor: pointer;
       display: flex;
@@ -768,7 +773,7 @@
     }
 
     .map-action-btn .material-icons {
-      font-size: 18px;
+      font-size: 16px;
       color: var(--radar-green);
     }
 
@@ -802,7 +807,6 @@
     </div>
     <div class="header-stats">
       <span>AERONAVES: <span class="stat-value" id="aircraftCount">0</span></span>
-      <span>RANGE: <span class="stat-value">400km</span></span>
       <div class="source-indicator">
         <span class="source-dot" id="sourceDot"></span>
         <span id="sourceLabel">OFFLINE</span>
@@ -819,19 +823,43 @@
   <button class="toggle-panel-btn" id="togglePanelBtn" title="Lista de aeronaves">▶</button>
 
   <!-- RESET VIEW BUTTON + MY LOCATION -->
-  <div class="map-action-btns">
-    <button class="map-action-btn" id="myLocationBtn" title="Minha localização">
-      <span class="material-icons">place</span>
-    </button>
-    <button class="map-action-btn" id="resetViewBtn" title="Visão geral (SBFI)">
-      <span class="material-icons">my_location</span>
-    </button>
-    <button class="map-action-btn" id="themeToggleBtn" title="Tema noturno (vermelho)">
-      <span class="material-icons">nightlight</span>
-    </button>
-    <button class="map-action-btn" id="bordersToggleBtn" title="Mostrar fronteiras">
-      <span class="material-icons">public</span>
-    </button>
+  <!-- CONTROLS STACK (botões + player) -->
+  <div class="controls-stack">
+    <div class="map-action-btns">
+      <button class="map-action-btn" id="myLocationBtn" title="Minha localização">
+        <span class="material-icons">place</span>
+      </button>
+      <button class="map-action-btn" id="resetViewBtn" title="Visão geral (SBFI)">
+        <span class="material-icons">my_location</span>
+      </button>
+      <button class="map-action-btn" id="themeToggleBtn" title="Tema noturno (vermelho)">
+        <span class="material-icons">nightlight</span>
+      </button>
+      <button class="map-action-btn" id="bordersToggleBtn" title="Mostrar fronteiras">
+        <span class="material-icons">public</span>
+      </button>
+      <button class="map-action-btn" id="fullscreenBtn" title="Tela cheia">
+        <span class="material-icons">fullscreen</span>
+      </button>
+    </div>
+    <div class="audio-panel">
+      <button class="play-btn" id="audioPlayBtn" title="Ouvir fonia ATC">
+        <span class="material-icons">play_arrow</span>
+      </button>
+      <div class="audio-info">
+        <div class="label">FONIA ATC</div>
+        <div class="status-text" id="audioStatus">Disponível</div>
+      </div>
+      <div class="volume-control">
+        <button id="audioVolBtn" title="Mudo">
+          <span class="material-icons">volume_up</span>
+        </button>
+        <input type="range" id="audioVolSlider" min="0" max="100" value="100">
+      </div>
+      <audio id="radioPlayer" preload="none">
+        <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
+      </audio>
+    </div>
   </div>
 
   <!-- ALTITUDE LEGEND (trail) -->
@@ -857,26 +885,6 @@
     <div class="aircraft-list" id="aircraftList">
       <div class="no-data">Aguardando dados ADS-B...</div>
     </div>
-  </div>
-
-  <!-- AUDIO PLAYER -->
-  <div class="audio-panel">
-    <button class="play-btn" id="audioPlayBtn" title="Ouvir fonia ATC">
-      <span class="material-icons">play_arrow</span>
-    </button>
-    <div class="audio-info">
-      <div class="label">FONIA ATC</div>
-      <div class="status-text" id="audioStatus">Disponível</div>
-    </div>
-    <div class="volume-control">
-      <button id="audioVolBtn" title="Mudo">
-        <span class="material-icons">volume_up</span>
-      </button>
-      <input type="range" id="audioVolSlider" min="0" max="100" value="100">
-    </div>
-    <audio id="radioPlayer" preload="none">
-      <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
-    </audio>
   </div>
 
   <script>
@@ -997,7 +1005,7 @@
       // Zoom médio na aeronave (só no clique direto)
       if (zoomToAircraft) {
         if (selMarker) {
-          map.setView(selMarker.getLatLng(), 9, { animate: true });
+          map.setView(selMarker.getLatLng(), 10, { animate: true });
         }
       }
 
@@ -1087,7 +1095,7 @@
     function initMap() {
       map = L.map('radar-map', {
         center: [SBFI.lat, SBFI.lng],
-        zoom: 7,
+        zoom: 9,
         zoomControl: true,
         attributionControl: false,
         maxBounds: [
@@ -1112,24 +1120,6 @@
 
       drawRangeRings();
       drawAirportMarkers();
-
-      // Fullscreen control (topleft, below zoom)
-      const FullscreenControl = L.Control.extend({
-        options: { position: 'topleft' },
-        onAdd: function () {
-          const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-          const link = L.DomUtil.create('a', '', container);
-          link.id = 'fullscreenBtn';
-          link.href = '#';
-          link.title = 'Tela cheia';
-          link.role = 'button';
-          link.innerHTML = '<span class="material-icons" style="font-size:18px;line-height:30px;">fullscreen</span>';
-          L.DomEvent.disableClickPropagation(container);
-          L.DomEvent.on(link, 'click', L.DomEvent.preventDefault);
-          return container;
-        }
-      });
-      map.addControl(new FullscreenControl());
     }
 
     // ==========================================
@@ -1592,7 +1582,7 @@
           const icao = el.dataset.icao;
           const marker = aircraftMarkers[icao];
           if (marker) {
-            map.setView(marker.getLatLng(), 9, { animate: true });
+            map.setView(marker.getLatLng(), 10, { animate: true });
             drawTrail(icao);
           }
         });
@@ -1690,17 +1680,42 @@
       });
 
       // Se o player der erro, tenta reconectar
-      player.addEventListener('error', () => {
+      let reconnectTimeout = null;
+      function reconnectStream() {
+        if (!isPlaying || reconnectTimeout) return;
+        statusText.textContent = 'Reconectando...';
+        statusText.classList.remove('live');
+        reconnectTimeout = setTimeout(() => {
+          reconnectTimeout = null;
+          const source = player.querySelector('source');
+          source.src = getStreamUrl();
+          player.load();
+          player.play().catch(() => {
+            // Tentar novamente em 5s
+            setTimeout(() => reconnectStream(), 5000);
+          });
+        }, 3000);
+      }
+
+      player.addEventListener('error', reconnectStream);
+      player.addEventListener('stalled', () => {
         if (isPlaying) {
-          statusText.textContent = 'Reconectando...';
+          statusText.textContent = 'Buffering...';
           statusText.classList.remove('live');
+          // Se ficar preso por 10s, forçar reconexão
           setTimeout(() => {
-            const source = player.querySelector('source');
-            source.src = getStreamUrl();
-            player.load();
-            player.play().catch(() => {});
-          }, 3000);
+            if (isPlaying && !player.paused && statusText.textContent === 'Buffering...') {
+              reconnectStream();
+            }
+          }, 10000);
         }
+      });
+
+      // Reconectar ao voltar online
+      window.addEventListener('online', () => {
+        if (isPlaying) reconnectStream();
+        // Forçar refresh de aeronaves imediatamente
+        fetchADSBData();
       });
 
       // Buffer management
@@ -1887,7 +1902,7 @@
 
       // Reset view button
       document.getElementById('resetViewBtn').addEventListener('click', () => {
-        map.setView([SBFI.lat, SBFI.lng], 7, { animate: true });
+        map.setView([SBFI.lat, SBFI.lng], 9, { animate: true });
         clearTrail();
       });
 
