@@ -313,23 +313,6 @@
       display: none;
     }
 
-    /* ========== AIRCRAFT TOOLTIP ========== */
-    .aircraft-tooltip {
-      background: var(--radar-panel-bg) !important;
-      border: 1px solid var(--radar-border) !important;
-      color: var(--radar-green) !important;
-      font-family: 'Roboto Mono', monospace !important;
-      font-size: 11px !important;
-      padding: 6px 10px !important;
-      border-radius: 2px !important;
-      box-shadow: 0 0 12px var(--radar-green-faint) !important;
-      line-height: 1.5;
-    }
-
-    .aircraft-tooltip::before {
-      border-top-color: var(--radar-border) !important;
-    }
-
     .leaflet-tooltip-top::before {
       border-top-color: var(--radar-border) !important;
     }
@@ -1055,13 +1038,7 @@
       if (aircraftMarkers[icao]) {
         const prev = aircraftMarkers[icao];
         if (prev._icon) prev._icon.classList.remove('aircraft-selected');
-        const d = prev._acData;
-        if (d && !prev.getTooltip()) {
-          const tip = `${d.callsign}  FL${d.alt ? Math.round(d.alt / 100) : '---'}`;
-          prev.bindTooltip(tip, { permanent: false, direction: 'top', offset: [0, -12], className: 'aircraft-tooltip' });
-        }
       }
-      // Remover trail layers deste ICAO
       if (trailLayersByIcao[icao]) {
         trailLayersByIcao[icao].forEach(l => map.removeLayer(l));
         delete trailLayersByIcao[icao];
@@ -1139,11 +1116,6 @@
         if (aircraftMarkers[icao]) {
           const prev = aircraftMarkers[icao];
           if (prev._icon) prev._icon.classList.remove('aircraft-selected');
-          const d = prev._acData;
-          if (d && !prev.getTooltip()) {
-            const tip = `${d.callsign}  FL${d.alt ? Math.round(d.alt / 100) : '---'}`;
-            prev.bindTooltip(tip, { permanent: false, direction: 'top', offset: [0, -12], className: 'aircraft-tooltip' });
-          }
         }
       });
       hideAircraftDetail();
@@ -1589,9 +1561,6 @@
           if (selectedIcaos.has(a.icao) && marker._icon) {
             marker._icon.classList.add('aircraft-selected');
           }
-          if (!selectedIcaos.has(a.icao)) {
-            marker.setTooltipContent(tooltipContent);
-          }
           marker._acData = a;
           // Atualizar painel fixo se esta aeronave está selecionada
           if (selectedIcaos.has(a.icao)) {
@@ -1601,14 +1570,7 @@
           const marker = L.marker([a.lat, a.lon], {
             icon: createAircraftIcon(a.track, a, zoom)
           })
-            .bindTooltip(tooltipContent, {
-              permanent: false,
-              direction: 'top',
-              offset: [0, -12],
-              className: 'aircraft-tooltip'
-            })
             .on('click', function () {
-              if (!selectedIcaos.has(a.icao)) this.unbindTooltip();
               drawTrail(a.icao);
             })
             .addTo(aircraftGroup);
