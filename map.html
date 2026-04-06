@@ -279,6 +279,10 @@
       font-size: 8px;
     }
 
+    .aircraft-selected .aircraft-label {
+      display: none;
+    }
+
     /* ========== AIRCRAFT TOOLTIP ========== */
     .aircraft-tooltip {
       background: var(--radar-panel-bg) !important;
@@ -335,6 +339,47 @@
 
     .aircraft-popup .label {
       color: var(--radar-text-dim);
+    }
+
+    /* ========== AIRCRAFT DETAIL (fixed top-left) ========== */
+    #aircraftDetail {
+      display: none;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: var(--radar-panel-bg);
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--radar-green);
+      box-shadow: 0 0 20px var(--radar-green-faint);
+      min-width: 180px;
+      pointer-events: auto;
+    }
+    #aircraftDetail.visible { display: block; }
+    #aircraftDetail .callsign {
+      font-size: 14px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--radar-border);
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+    #aircraftDetail .label {
+      color: var(--radar-text-dim);
+    }
+    #aircraftDetail .detail-close {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      background: none;
+      border: none;
+      color: var(--radar-green);
+      font-size: 16px;
+      cursor: pointer;
     }
 
     /* ========== AUDIO PLAYER PANEL ========== */
@@ -736,7 +781,9 @@
   </div>
 
   <!-- MAP -->
-  <div id="radar-map"></div>
+  <div id="radar-map">
+    <div id="aircraftDetail"></div>
+  </div>
 
   <!-- TOGGLE PANEL BUTTON (mobile) -->
   <button class="toggle-panel-btn" id="togglePanelBtn" title="Lista de aeronaves">▶</button>
@@ -824,18 +871,9 @@
     const MAX_RANGE_KM = 400;
     const REFRESH_INTERVAL_MS = 10000; // 10 segundos
 
-    // Endpoint ADS-B — altere para seu servidor quando estiver pronto
-    // Formato esperado: array de objetos com { icao, callsign, lat, lon, alt, speed, track, vrate, squawk }
-    // Fallback: OpenSky Network API (pública, sem auth, área ao redor de SBFI)
-    const ADSB_ENDPOINTS = {
-      // Servidor próprio (descomentar quando disponível):
-      // custom: 'https://seu-servidor.com/api/adsb',
+    // Endpoint ADS-B — API própria
+    const ADSB_API_BASE = 'https://adsb.io.tec.br/api';
 
-      // OpenSky Network (fallback público gratuito)
-      opensky: `https://opensky-network.org/api/states/all?lamin=${SBFI.lat - 3.6}&lomin=${SBFI.lng - 4.5}&lamax=${SBFI.lat + 3.6}&lomax=${SBFI.lng + 4.5}`
-    };
-
-    let currentEndpoint = ADSB_ENDPOINTS.opensky;
     let aircraftMarkers = {};
     let map, rangeGroup, aircraftGroup;
     let bordersLayer = null;
@@ -843,108 +881,6 @@
     let bordersCache = {};  // { '110m': geojson, '50m': geojson, '10m': geojson }
     let currentBordersRes = null;
     let refreshTimer = null;
-
-    // ==========================================
-    // DADOS MOCK (remover quando tiver fonte real)
-    // ==========================================
-    const USE_MOCK = true;
-
-    const MOCK_AIRCRAFT = [
-      // Chegando de São Paulo (nordeste)
-      { icao: 'E49406', callsign: 'GLO1571', lat: -25.22, lon: -53.80, alt: 12500, speed: 280, track: 225, vrate: -1200, squawk: '4523', onGround: false },
-      // Saindo para Buenos Aires (sul)
-      { icao: 'E494A1', callsign: 'ARG1832', lat: -26.10, lon: -54.70, alt: 28000, speed: 420, track: 185, vrate: 800, squawk: '2341', onGround: false },
-      // Cruzando em rota alta (Curitiba → Asunción)
-      { icao: 'A0B1C2', callsign: 'TAM3421', lat: -25.45, lon: -54.20, alt: 36000, speed: 460, track: 270, vrate: 0, squawk: '5612', onGround: false },
-      // Aproximação final SBFI — pista 14
-      { icao: 'E49512', callsign: 'AZU4055', lat: -25.55, lon: -54.42, alt: 3200, speed: 145, track: 140, vrate: -700, squawk: '6201', onGround: false },
-      // No solo — taxiando
-      { icao: 'E49320', callsign: 'GLO1572', lat: -25.5983, lon: -54.4870, alt: 0, speed: 12, track: 320, vrate: 0, squawk: '1000', onGround: true },
-      // Helicóptero Itaipu (baixa altitude, lento)
-      { icao: 'PP1234', callsign: 'PRITB', lat: -25.43, lon: -54.59, alt: 1500, speed: 95, track: 30, vrate: 200, squawk: '7000', onGround: false },
-      // Voo paraguaio vindo de Ciudad del Este / Guarani
-      { icao: 'ZP0042', callsign: 'LAP501', lat: -25.46, lon: -54.85, alt: 8000, speed: 210, track: 90, vrate: -400, squawk: '3312', onGround: false },
-      // Aeronave argentina operando IGR/SARI (Puerto Iguazú)
-      { icao: 'LV1098', callsign: 'FBZ221', lat: -25.74, lon: -54.47, alt: 5500, speed: 180, track: 350, vrate: 600, squawk: '4110', onGround: false },
-      // Trânsito alto — LATAM Lima → São Paulo
-      { icao: 'CC0987', callsign: 'LAN8032', lat: -24.80, lon: -55.30, alt: 39000, speed: 490, track: 120, vrate: 0, squawk: '1234', onGround: false },
-      // Cargueiro — noturno
-      { icao: 'N12345', callsign: 'ABJ782', lat: -25.90, lon: -53.60, alt: 32000, speed: 440, track: 255, vrate: 0, squawk: '0456', onGround: false },
-      // Cessna em treinamento VFR local
-      { icao: 'PT5678', callsign: 'PRGWX', lat: -25.63, lon: -54.55, alt: 2500, speed: 100, track: 60, vrate: 0, squawk: '7000', onGround: false },
-      // Embraer Curitiba → Assunção passando ao norte
-      { icao: 'E49801', callsign: 'AZU5180', lat: -24.95, lon: -54.10, alt: 25000, speed: 380, track: 290, vrate: 100, squawk: '5500', onGround: false },
-      // Gol vindo de Campo Grande (noroeste)
-      { icao: 'E49602', callsign: 'GLO2298', lat: -24.60, lon: -55.50, alt: 18000, speed: 340, track: 150, vrate: -900, squawk: '2210', onGround: false },
-      // Militar brasileiro em patrulha
-      { icao: 'FAB001', callsign: 'BRS101', lat: -26.30, lon: -54.00, alt: 15000, speed: 310, track: 45, vrate: 0, squawk: '0100', onGround: false },
-      // Decolagem SBFI pista 32
-      { icao: 'E49888', callsign: 'AZU4056', lat: -25.58, lon: -54.50, alt: 1800, speed: 160, track: 320, vrate: 2500, squawk: '6202', onGround: false },
-    ];
-
-    function getMockData() {
-      // Simular pequenas variações de posição a cada refresh
-      return MOCK_AIRCRAFT.map(a => {
-        const jitter = () => (Math.random() - 0.5) * 0.02;
-        const spdJitter = Math.round((Math.random() - 0.5) * 10);
-        const altJitter = a.onGround ? 0 : Math.round((Math.random() - 0.5) * 200);
-        return {
-          ...a,
-          lat: a.lat + jitter(),
-          lon: a.lon + jitter(),
-          speed: Math.max(0, a.speed + spdJitter),
-          alt: Math.max(0, a.alt + altJitter),
-          track: (a.track + (Math.random() - 0.5) * 4 + 360) % 360
-        };
-      });
-    }
-
-    // ==========================================
-    // MOCK TRAILS (histórico de posições)
-    // ==========================================
-    // Gera um trail simulado "para trás" a partir da posição atual
-    function generateMockTrail(ac, numPoints) {
-      const trail = [];
-      const n = numPoints || 30;
-      // Calcular heading reverso
-      const hdg = ((ac.track || 0) + 180) % 360;
-      const hdgRad = hdg * Math.PI / 180;
-      // Velocidade em graus por ponto (~30s entre pontos a ~speed kt)
-      const spdDeg = (ac.speed || 200) * 0.000005;
-
-      let lat = ac.lat;
-      let lon = ac.lon;
-      let alt = ac.alt || 0;
-
-      // Primeiro ponto: posição atual
-      trail.push({ lat, lon, alt });
-
-      for (let i = 1; i <= n; i++) {
-        // Mover para trás + leve curva
-        const curve = Math.sin(i * 0.15) * 0.0008;
-        lat += Math.cos(hdgRad) * spdDeg + (Math.random() - 0.5) * 0.003;
-        lon += Math.sin(hdgRad) * spdDeg + curve;
-
-        // Simular altitude passada
-        if (ac.vrate && ac.vrate !== 0) {
-          // Se descendo, antes estava mais alto; se subindo, antes estava mais baixo
-          alt = Math.max(0, alt - ac.vrate * 0.5);
-        }
-        alt += (Math.random() - 0.5) * 100;
-        alt = Math.max(0, alt);
-
-        trail.push({ lat, lon, alt: Math.round(alt) });
-      }
-
-      // Inverter para ficar do passado → presente
-      return trail.reverse();
-    }
-
-    const MOCK_TRAILS = {};
-    // Pré-gerar trails para cada aeronave mock
-    MOCK_AIRCRAFT.forEach(ac => {
-      MOCK_TRAILS[ac.icao] = generateMockTrail(ac, ac.onGround ? 8 : 35);
-    });
 
     // ==========================================
     // TRAIL — COR POR ALTITUDE
@@ -982,6 +918,30 @@
     }
 
     // ==========================================
+    // PAINEL DETALHES DA AERONAVE (fixo top-left)
+    // ==========================================
+    function showAircraftDetail(a) {
+      const el = document.getElementById('aircraftDetail');
+      el.innerHTML = `
+        <button class="detail-close" onclick="clearTrail()">✕</button>
+        <div class="callsign">${a.callsign}</div>
+        <span class="label">ICAO:</span> ${a.icao}<br>
+        <span class="label">ALT:</span> ${a.alt != null ? a.alt.toLocaleString() + ' ft' : '---'}<br>
+        <span class="label">SPD:</span> ${a.speed != null ? a.speed + ' kt' : '---'}<br>
+        <span class="label">HDG:</span> ${a.track != null ? Math.round(a.track) + '°' : '---'}<br>
+        <span class="label">V/S:</span> ${a.vrate != null ? (a.vrate > 0 ? '+' : '') + a.vrate + ' fpm' : '---'}<br>
+        <span class="label">SQK:</span> ${a.squawk || '---'}<br>
+        <span class="label">DIST:</span> ${a.distance} km<br>
+        <span class="label">GND:</span> ${a.onGround ? 'SIM' : 'NÃO'}`;
+      el.classList.add('visible');
+    }
+
+    function hideAircraftDetail() {
+      const el = document.getElementById('aircraftDetail');
+      el.classList.remove('visible');
+    }
+
+    // ==========================================
     // DESENHAR / LIMPAR TRAIL
     // ==========================================
     let activeTrailLayers = [];
@@ -993,16 +953,46 @@
       selectedIcao = icao;
       followingIcao = icao;
 
+      // Esconder label do ícone na aeronave selecionada
+      const selMarker = aircraftMarkers[icao];
+      if (selMarker && selMarker._icon) {
+        selMarker._icon.classList.add('aircraft-selected');
+      }
+
+      // Mostrar painel de detalhes
+      if (selMarker && selMarker._acData) {
+        showAircraftDetail(selMarker._acData);
+      }
+
       // Zoom médio na aeronave (só no clique direto)
       if (zoomToAircraft) {
-        const marker = aircraftMarkers[icao];
-        if (marker) {
-          map.setView(marker.getLatLng(), 12, { animate: true });
+        if (selMarker) {
+          map.setView(selMarker.getLatLng(), 9, { animate: true });
         }
       }
 
-      const trail = USE_MOCK ? MOCK_TRAILS[icao] : null;
-      if (!trail || trail.length < 2) return;
+      // Buscar trail real da API
+      fetchTrail(icao);
+    }
+
+    async function fetchTrail(icao) {
+      try {
+        const resp = await fetch(`${ADSB_API_BASE}/aircraft/${icao}/trail?minutes=30`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const trail = (data.trail || []).map(p => ({
+          lat: Number(p.lat),
+          lon: Number(p.lon),
+          alt: p.alt != null ? Number(p.alt) : 0 // já em pés
+        }));
+        if (trail.length < 2) return;
+        renderTrail(trail);
+      } catch (err) {
+        console.warn('Erro ao buscar trail:', err.message);
+      }
+    }
+
+    function renderTrail(trail) {
 
       // Mostrar legenda
       // document.getElementById('altLegend').classList.add('visible');
@@ -1042,6 +1032,18 @@
     }
 
     function clearTrail() {
+      // Restaurar label da aeronave anteriormente selecionada
+      if (selectedIcao && aircraftMarkers[selectedIcao]) {
+        const prev = aircraftMarkers[selectedIcao];
+        if (prev._icon) prev._icon.classList.remove('aircraft-selected');
+        // Restaurar tooltip
+        const d = prev._acData;
+        if (d && !prev.getTooltip()) {
+          const tip = `${d.callsign}  FL${d.alt ? Math.round(d.alt / 100) : '---'}`;
+          prev.bindTooltip(tip, { permanent: false, direction: 'top', offset: [0, -12], className: 'aircraft-tooltip' });
+        }
+      }
+      hideAircraftDetail();
       activeTrailLayers.forEach(l => map.removeLayer(l));
       activeTrailLayers = [];
       selectedIcao = null;
@@ -1421,57 +1423,37 @@
     // BUSCAR DADOS ADS-B
     // ==========================================
     async function fetchADSBData() {
-      // Modo mock para visualização
-      if (USE_MOCK) {
-        const aircraft = getMockData().map(a => {
-          a.distance = Math.round(haversineKm(SBFI.lat, SBFI.lng, a.lat, a.lon));
-          return a;
-        }).filter(a => a.distance <= MAX_RANGE_KM);
-
-        updateSourceStatus(true, 'MOCK');
-        updateAircraft(aircraft);
-        return;
-      }
-
       try {
-        const response = await fetch(currentEndpoint);
+        const response = await fetch(`${ADSB_API_BASE}/aircraft`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const data = await response.json();
-        const aircraft = parseOpenSkyData(data);
+        const aircraft = (data.aircraft || [])
+          .filter(a => a.lat != null && a.lon != null)
+          .map(a => ({
+            icao: a.icaoHex,
+            callsign: (a.callsign || '').trim() || a.icaoHex,
+            lat: Number(a.lat),
+            lon: Number(a.lon),
+            alt: a.altitude, // já em pés (do dump1090 via feeder)
+            speed: a.speed,
+            track: a.track != null ? Number(a.track) : null,
+            vrate: a.vrate,
+            squawk: a.squawk,
+            onGround: a.onGround || false,
+          }))
+          .filter(a => {
+            const dist = haversineKm(SBFI.lat, SBFI.lng, a.lat, a.lon);
+            a.distance = Math.round(dist);
+            return dist <= MAX_RANGE_KM;
+          });
 
-        updateSourceStatus(true);
+        updateSourceStatus(true, 'SBFI');
         updateAircraft(aircraft);
       } catch (err) {
         console.warn('Erro ao buscar dados ADS-B:', err.message);
         updateSourceStatus(false);
       }
-    }
-
-    // Parser para OpenSky Network API
-    function parseOpenSkyData(data) {
-      if (!data || !data.states) return [];
-
-      return data.states
-        .filter(s => s[6] != null && s[5] != null) // lat, lon presentes
-        .map(s => ({
-          icao: s[0],
-          callsign: (s[1] || '').trim() || s[0],
-          lat: s[6],
-          lon: s[5],
-          alt: s[7] != null ? Math.round(s[7] * 3.281) : null, // metros → pés
-          speed: s[9] != null ? Math.round(s[9] * 1.944) : null, // m/s → knots
-          track: s[10],
-          vrate: s[11] != null ? Math.round(s[11] * 196.85) : null, // m/s → ft/min
-          squawk: s[14],
-          onGround: s[8]
-        }))
-        .filter(a => {
-          // Filtrar por distância (400km aprox)
-          const dist = haversineKm(SBFI.lat, SBFI.lng, a.lat, a.lon);
-          a.distance = Math.round(dist);
-          return dist <= MAX_RANGE_KM;
-        });
     }
 
     // Haversine para distância em km
@@ -1504,26 +1486,18 @@
       aircraft.forEach(a => {
         const tooltipContent = `${a.callsign}  FL${a.alt ? Math.round(a.alt / 100) : '---'}`;
 
-        const popupContent = `
-          <div class="aircraft-popup">
-            <div class="callsign">${a.callsign}</div>
-            <span class="label">ICAO:</span> ${a.icao}<br>
-            <span class="label">ALT:</span> ${a.alt != null ? a.alt.toLocaleString() + ' ft' : '---'}<br>
-            <span class="label">SPD:</span> ${a.speed != null ? a.speed + ' kt' : '---'}<br>
-            <span class="label">HDG:</span> ${a.track != null ? Math.round(a.track) + '°' : '---'}<br>
-            <span class="label">V/S:</span> ${a.vrate != null ? (a.vrate > 0 ? '+' : '') + a.vrate + ' fpm' : '---'}<br>
-            <span class="label">SQK:</span> ${a.squawk || '---'}<br>
-            <span class="label">DIST:</span> ${a.distance} km<br>
-            <span class="label">GND:</span> ${a.onGround ? 'SIM' : 'NÃO'}
-          </div>`;
-
         if (aircraftMarkers[a.icao]) {
           const marker = aircraftMarkers[a.icao];
           marker.setLatLng([a.lat, a.lon]);
           marker.setIcon(createAircraftIcon(a.track, a, zoom));
-          marker.setTooltipContent(tooltipContent);
-          marker.setPopupContent(popupContent);
+          if (a.icao !== selectedIcao) {
+            marker.setTooltipContent(tooltipContent);
+          }
           marker._acData = a;
+          // Atualizar painel fixo se esta aeronave está selecionada
+          if (a.icao === selectedIcao) {
+            showAircraftDetail(a);
+          }
         } else {
           const marker = L.marker([a.lat, a.lon], {
             icon: createAircraftIcon(a.track, a, zoom)
@@ -1534,8 +1508,10 @@
               offset: [0, -12],
               className: 'aircraft-tooltip'
             })
-            .bindPopup(popupContent)
-            .on('click', function () { drawTrail(a.icao); })
+            .on('click', function () {
+              this.unbindTooltip();
+              drawTrail(a.icao);
+            })
             .addTo(aircraftGroup);
 
           marker._acData = a;
@@ -1587,8 +1563,7 @@
           const icao = el.dataset.icao;
           const marker = aircraftMarkers[icao];
           if (marker) {
-            map.setView(marker.getLatLng(), 10, { animate: true });
-            marker.openPopup();
+            map.setView(marker.getLatLng(), 9, { animate: true });
             drawTrail(icao);
           }
         });
@@ -1916,8 +1891,7 @@
         }
       });
 
-      // Limpar trail ao fechar popup ou clicar no mapa vazio
-      map.on('popupclose', () => { clearTrail(); });
+      // Limpar trail ao clicar no mapa vazio
       map.on('click', (e) => {
         // Só limpar se clicou fora de um marcador
         if (!e.originalEvent._fromMarker) clearTrail();
