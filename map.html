@@ -17,11 +17,11 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 
-  <link rel="apple-touch-icon" sizes="180x180" href="/img_map/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/img_map/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/img_map/favicon-16x16.png">
-  <link rel="icon" type="image/x-icon" href="/img_map/favicon.ico">
-  <link rel="manifest" href="/img_map/site.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+  <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
+  <link rel="manifest" href="/favicon/site.webmanifest">
 
   <link rel="canonical" href="https://atc.iguspotters.com.br/map">
   <meta name="robots" content="index, follow">
@@ -32,7 +32,7 @@
   <meta property="og:url" content="https://atc.iguspotters.com.br/map">
   <meta property="og:title" content="Radar ADS-B — IGU/SBFI">
   <meta property="og:description" content="Mapa radar ADS-B ao vivo na região de IGU/SBFI com fonia ATC.">
-  <meta property="og:image" content="https://atc.iguspotters.com.br/img_map/android-chrome-512x512.png">
+  <meta property="og:image" content="https://atc.iguspotters.com.br/favicon/android-chrome-512x512.png">
 
   <title>Radar ADS-B — IGU/SBFI</title>
 
@@ -399,6 +399,13 @@
       color: var(--radar-green);
       font-size: 16px;
       cursor: pointer;
+    }
+    .detail-card {
+      cursor: pointer;
+    }
+    .detail-card.copied {
+      border-color: var(--radar-green);
+      transition: border-color 0.3s;
     }
 
     /* ========== AUDIO PLAYER PANEL ========== */
@@ -813,7 +820,7 @@
     <h1>SBFI RADAR</h1>
     <div class="header-nav">
       <a href="/">FONIA</a>
-      <a href="/map" style="color: var(--radar-green);">MAPA</a>
+      <a href="/map.html" style="color: var(--radar-green);">MAPA</a>
     </div>
     <div class="header-stats">
       <span>AERONAVES: <span class="stat-value" id="aircraftCount">0</span></span>
@@ -826,7 +833,7 @@
 
   <!-- MAP -->
   <div id="radar-map">
-    <div id="aircraftDetail"></div>
+    <div id="aircraftDetail" onclick="event.stopPropagation()"></div>
   </div>
 
   <!-- TOGGLE PANEL BUTTON (mobile) -->
@@ -971,6 +978,11 @@
         card = document.createElement('div');
         card.className = 'detail-card';
         card.setAttribute('data-icao', a.icao);
+        card.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (e.target.classList.contains('detail-close')) return;
+          copyCardData(this);
+        });
         container.appendChild(card);
       }
       card.innerHTML = `
@@ -997,6 +1009,27 @@
         container.innerHTML = '';
         container.classList.remove('visible');
       }
+    }
+
+    function copyCardData(card) {
+      const icao = card.getAttribute('data-icao');
+      const now = new Date();
+      const ts = now.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      let text = card.innerText.replace('✕', '').trim();
+      const marker = aircraftMarkers[icao];
+      if (marker && marker._acData) {
+        text += '\nPOS: ' + marker._acData.lat.toFixed(5) + ', ' + marker._acData.lon.toFixed(5);
+      }
+      text += '\nData/Hora: ' + ts;
+      navigator.clipboard.writeText(text).then(() => {
+        card.classList.add('copied');
+        const orig = card.querySelector('.callsign').textContent;
+        card.querySelector('.callsign').textContent = 'Copiado!';
+        setTimeout(() => {
+          card.classList.remove('copied');
+          card.querySelector('.callsign').textContent = orig;
+        }, 1200);
+      }).catch(() => {});
     }
 
     // ==========================================
@@ -1804,30 +1837,46 @@
           source.src = getStreamUrl();
           player.load();
           player.play().catch(() => {
-            // Tentar novamente em 5s
             setTimeout(() => reconnectStream(), 5000);
           });
         }, 3000);
       }
+
+      function configLowLatency() {
+        player.setAttribute('preload', 'none');
+        try {
+          if (player.buffered && player.buffered.length > 0) {
+            player.currentTime = player.buffered.end(player.buffered.length - 1);
+          }
+        } catch (e) { }
+      }
+
+      configLowLatency();
+      player.addEventListener('loadeddata', configLowLatency);
 
       player.addEventListener('error', reconnectStream);
       player.addEventListener('stalled', () => {
         if (isPlaying) {
           statusText.textContent = 'Buffering...';
           statusText.classList.remove('live');
-          // Se ficar preso por 10s, forçar reconexão
           setTimeout(() => {
             if (isPlaying && !player.paused && statusText.textContent === 'Buffering...') {
               reconnectStream();
             }
-          }, 10000);
+          }, 5000);
+        }
+      });
+
+      player.addEventListener('waiting', () => {
+        if (isPlaying) {
+          statusText.textContent = 'Aguardando dados...';
+          statusText.classList.remove('live');
         }
       });
 
       // Reconectar ao voltar online
       window.addEventListener('online', () => {
         if (isPlaying) reconnectStream();
-        // Forçar refresh de aeronaves imediatamente
         fetchADSBData();
       });
 
@@ -1839,13 +1888,25 @@
           try {
             if (player.buffered.length > 0) {
               const bufferSize = player.buffered.end(player.buffered.length - 1) - player.buffered.start(0);
-              if (bufferSize > 3) {
-                player.currentTime = player.buffered.end(player.buffered.length - 1) - 1;
+              if (bufferSize > 2) {
+                player.currentTime = player.buffered.end(player.buffered.length - 1) - 0.5;
               }
             }
-          } catch (e) { /* ignore */ }
+          } catch (e) { }
         }
       });
+
+      // Monitor periódico — reduz latência
+      setInterval(() => {
+        if (isPlaying && !player.paused) {
+          try {
+            if (player.buffered.length > 0) {
+              const bh = player.buffered.end(player.buffered.length - 1) - player.currentTime;
+              if (bh > 3) player.currentTime = player.buffered.end(player.buffered.length - 1) - 0.5;
+            }
+          } catch (e) { }
+        }
+      }, 3000);
 
       player.volume = 1.0;
     }
@@ -2099,6 +2160,22 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+
+    // PWA Install prompt
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!localStorage.getItem('pwaInstallDismissed')) {
+        const ok = confirm('Adicionar SBFI Radar à tela inicial?');
+        if (ok) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+        } else {
+          localStorage.setItem('pwaInstallDismissed', '1');
+        }
+      }
+    });
   </script>
 </body>
 
