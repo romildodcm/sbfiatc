@@ -158,12 +158,9 @@
       font-family: 'Roboto Mono', monospace;
     }
 
-    /* Zoom controls — canto inferior esquerdo (desktop) */
+    /* Zoom controls — custom (dentro do controls-stack) */
     .leaflet-top.leaflet-left {
-      top: auto !important;
-      bottom: 10px !important;
-      left: 10px !important;
-      right: auto !important;
+      display: none !important;
     }
 
     /* Ocultar controles padrão do Leaflet */
@@ -733,7 +730,7 @@
 
       .audio-panel { padding: 8px 12px; }
 
-      /* Ocultar zoom no mobile */
+      /* Ocultar zoom nativo (já ocultado globalmente) */
       .leaflet-top.leaflet-left {
         display: none !important;
       }
@@ -838,11 +835,18 @@
   <!-- CONTROLS STACK (botões + player) -->
   <div class="controls-stack">
     <div class="map-action-btns">
-      <button class="map-action-btn" id="myLocationBtn" title="Minha localização">
-        <span class="material-icons">place</span>
+      <button class="map-action-btn" id="zoomInBtn" title="Zoom in">
+        <span class="material-icons">add</span>
+      </button>
+      <button class="map-action-btn" id="zoomOutBtn" title="Zoom out">
+        <span class="material-icons">remove</span>
       </button>
       <button class="map-action-btn" id="resetViewBtn" title="Visão geral (SBFI)">
         <span class="material-icons">my_location</span>
+      </button>
+      <hr style="border:none;border-top:1px solid var(--radar-border);width:100%;margin:2px 0;">
+      <button class="map-action-btn" id="myLocationBtn" title="Minha localização">
+        <span class="material-icons">place</span>
       </button>
       <button class="map-action-btn" id="themeToggleBtn" title="Tema noturno (vermelho)">
         <span class="material-icons">nightlight</span>
@@ -1132,7 +1136,7 @@
       map = L.map('radar-map', {
         center: [SBFI.lat, SBFI.lng],
         zoom: 9,
-        zoomControl: true,
+        zoomControl: false,
         attributionControl: false,
         maxBounds: [
           [SBFI.lat - 5, SBFI.lng - 6],
@@ -1937,10 +1941,20 @@
           document.fullscreenElement ? 'fullscreen_exit' : 'fullscreen';
       });
 
-      // Reset view button
+      // Zoom buttons
+      document.getElementById('zoomInBtn').addEventListener('click', () => map.zoomIn());
+      document.getElementById('zoomOutBtn').addEventListener('click', () => map.zoomOut());
+
+      // Reset view button — cicla entre zoom 9 (perto) e zoom 7 (400km)
+      const RESET_ZOOMS = [9, 7];
+      let resetZoomIdx = 0;
       document.getElementById('resetViewBtn').addEventListener('click', () => {
-        map.setView([SBFI.lat, SBFI.lng], 9, { animate: true });
+        const z = RESET_ZOOMS[resetZoomIdx];
+        map.setView([SBFI.lat, SBFI.lng], z, { animate: true });
         clearTrail();
+        const icon = document.getElementById('resetViewBtn').querySelector('.material-icons');
+        icon.textContent = z === 9 ? 'radar' : 'my_location';
+        resetZoomIdx = (resetZoomIdx + 1) % RESET_ZOOMS.length;
       });
 
       // Theme toggle button
