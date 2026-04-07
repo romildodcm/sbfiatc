@@ -1978,6 +1978,14 @@
         const tc = getThemeColors();
         userLocationMarker.setStyle({ color: tc.main, fillColor: tc.main });
       }
+
+      // Re-desenhar trails das aeronaves selecionadas com novas cores
+      selectedIcaos.forEach(icao => {
+        const data_ = trailDataByIcao[icao];
+        if (data_ && data_.points.length >= 2) {
+          renderTrail(data_.points, icao);
+        }
+      });
     }
 
     // ==========================================
@@ -2022,7 +2030,6 @@
       document.getElementById('resetViewBtn').addEventListener('click', () => {
         const z = RESET_ZOOMS[resetZoomIdx];
         map.setView([SBFI.lat, SBFI.lng], z, { animate: true });
-        clearTrail();
         const icon = document.getElementById('resetViewBtn').querySelector('.material-icons');
         icon.textContent = z === 9 ? 'radar' : 'my_location';
         resetZoomIdx = (resetZoomIdx + 1) % RESET_ZOOMS.length;
