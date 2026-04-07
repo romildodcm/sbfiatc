@@ -1002,6 +1002,8 @@
     // DESENHAR / LIMPAR TRAIL
     // ==========================================
     let trailLayersByIcao = {};
+    let trailDataByIcao = {};   // { icao: { points: [], lastTs: string } }
+    let trailTimersByIcao = {}; // { icao: intervalId }
     let selectedIcaos = new Set();
     let followingIcao = null;
 
@@ -1033,11 +1035,18 @@
         }
       }
 
-      // Buscar trail real da API
-      fetchTrail(icao);
+      // Buscar trail completo da API e iniciar refresh incremental
+      trailDataByIcao[icao] = { points: [], lastTs: null };
+      fetchTrail(icao, false);
+      trailTimersByIcao[icao] = setInterval(() => fetchTrail(icao, true), 5000);
     }
 
     function removeAircraftTrail(icao) {
+      // Parar refresh incremental
+      if (trailTimersByIcao[icao]) {
+        clearInterval(trailTimersByIcao[icao]);
+        delete trailTimersByIcao[icao];
+      }
       // Restaurar label da aeronave
       if (aircraftMarkers[icao]) {
         const prev = aircraftMarkers[icao];
@@ -1047,6 +1056,7 @@
         trailLayersByIcao[icao].forEach(l => map.removeLayer(l));
         delete trailLayersByIcao[icao];
       }
+      delete trailDataByIcao[icao];
       selectedIcaos.delete(icao);
       hideAircraftDetail(icao);
       if (followingIcao === icao) {
@@ -1054,21 +1064,81 @@
       }
     }
 
-    async function fetchTrail(icao) {
+    async function fetchTrail(icao, incremental) {
       try {
-        const resp = await fetch(`${ADSB_API_BASE}/aircraft/${icao}/trail?minutes=30`);
+        let url = `${ADSB_API_BASE}/aircraft/${icao}/trail`;
+        const data_ = trailDataByIcao[icao];
+        if (incremental && data_ && data_.lastTs) {
+          url += `?since=${encodeURIComponent(data_.lastTs)}`;
+        } else {
+          url += `?minutes=30`;
+        }
+        const resp = await fetch(url);
         if (!resp.ok) return;
         const data = await resp.json();
-        const trail = (data.trail || []).map(p => ({
+        const newPoints = (data.trail || []).map(p => ({
           lat: Number(p.lat),
           lon: Number(p.lon),
-          alt: p.alt != null ? Number(p.alt) : 0 // já em pés
+          alt: p.alt != null ? Number(p.alt) : 0,
+          ts: p.ts
         }));
-        if (trail.length < 2) return;
-        renderTrail(trail, icao);
+        if (newPoints.length === 0) return;
+
+        if (!trailDataByIcao[icao]) return; // deselecionado enquanto buscava
+
+        if (incremental && trailDataByIcao[icao].points.length > 0) {
+          // Apenas anexar pontos novos
+          trailDataByIcao[icao].points.push(...newPoints);
+          trailDataByIcao[icao].lastTs = newPoints[newPoints.length - 1].ts;
+          appendTrailSegments(icao, newPoints);
+        } else {
+          // Renderizar trail completo
+          trailDataByIcao[icao].points = newPoints;
+          trailDataByIcao[icao].lastTs = newPoints[newPoints.length - 1].ts;
+          renderTrail(newPoints, icao);
+        }
       } catch (err) {
         console.warn('Erro ao buscar trail:', err.message);
       }
+    }
+
+    function appendTrailSegments(icao, newPoints) {
+      if (!trailLayersByIcao[icao]) trailLayersByIcao[icao] = [];
+      const allPoints = trailDataByIcao[icao].points;
+      const startIdx = allPoints.length - newPoints.length - 1;
+
+      for (let i = Math.max(0, startIdx); i < allPoints.length - 1; i++) {
+        // Só desenhar segmentos novos (do último ponto antigo ao final)
+        if (i < allPoints.length - newPoints.length) continue;
+        const p1 = allPoints[i];
+        const p2 = allPoints[i + 1];
+        const avgAlt = ((p1.alt || 0) + (p2.alt || 0)) / 2;
+        const color = altitudeToColor(avgAlt);
+
+        const line = L.polyline(
+          [[p1.lat, p1.lon], [p2.lat, p2.lon]],
+          {
+            color: color,
+            weight: 2.5,
+            opacity: 0.8,
+            interactive: false
+          }
+        ).addTo(map);
+        trailLayersByIcao[icao].push(line);
+      }
+
+      // Ponto no último vértice
+      newPoints.forEach(p => {
+        const circle = L.circleMarker([p.lat, p.lon], {
+          radius: 2,
+          color: altitudeToColor(p.alt || 0),
+          fillColor: altitudeToColor(p.alt || 0),
+          fillOpacity: 0.9,
+          weight: 0,
+          interactive: false
+        }).addTo(map);
+        trailLayersByIcao[icao].push(circle);
+      });
     }
 
     function renderTrail(trail, icao) {
@@ -1115,6 +1185,9 @@
     }
 
     function clearTrail() {
+      // Parar todos os timers de refresh incremental
+      Object.values(trailTimersByIcao).forEach(id => clearInterval(id));
+      trailTimersByIcao = {};
       // Restaurar labels de todas as aeronaves selecionadas
       selectedIcaos.forEach(icao => {
         if (aircraftMarkers[icao]) {
@@ -1125,6 +1198,7 @@
       hideAircraftDetail();
       Object.values(trailLayersByIcao).forEach(layers => layers.forEach(l => map.removeLayer(l)));
       trailLayersByIcao = {};
+      trailDataByIcao = {};
       selectedIcaos.clear();
       followingIcao = null;
     }
@@ -1584,10 +1658,7 @@
         }
       });
 
-      // Re-desenhar trails ativos
-      selectedIcaos.forEach(icao => {
-        if (aircraftMarkers[icao]) fetchTrail(icao);
-      });
+      // Trails são atualizados por timer próprio (incremental)
 
       // Atualizar contadores e lista
       document.getElementById('aircraftCount').textContent = aircraft.length;
