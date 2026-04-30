@@ -1142,8 +1142,6 @@
       const startIdx = allPoints.length - newPoints.length - 1;
 
       for (let i = Math.max(0, startIdx); i < allPoints.length - 1; i++) {
-        // Só desenhar segmentos novos (do último ponto antigo ao final)
-        if (i < allPoints.length - newPoints.length) continue;
         const p1 = allPoints[i];
         const p2 = allPoints[i + 1];
         const avgAlt = ((p1.alt || 0) + (p2.alt || 0)) / 2;
