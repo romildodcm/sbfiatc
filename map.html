@@ -940,7 +940,7 @@
         </button>
         <input type="range" id="audioVolSlider" min="0" max="100" value="100">
       </div>
-      <audio id="radioPlayer" preload="none">
+      <audio id="radioPlayer" preload="none" muted>
         <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
       </audio>
     </div>
@@ -1840,10 +1840,18 @@
         el.addEventListener('click', () => {
           const icao = el.dataset.icao;
           const marker = aircraftMarkers[icao];
-          if (marker && !selectedIcaos.has(icao)) {
-            map.setView(marker.getLatLng(), 10, { animate: true });
+          if (selectedIcaos.has(icao)) {
+            // Deselecionar: remover trail e recentralizar
+            drawTrail(icao);
+            if (selectedIcaos.size === 0) {
+              map.setView([SBFI.lat, SBFI.lng], 9, { animate: true });
+            }
+          } else {
+            if (marker) {
+              map.setView(marker.getLatLng(), 10, { animate: true });
+            }
+            drawTrail(icao);
           }
-          drawTrail(icao);
         });
       });
     }
@@ -1892,26 +1900,31 @@
           statusText.classList.remove('live');
 
           setTimeout(() => {
-            player.play().then(() => {
-              isPlaying = true;
-              playBtn.querySelector('.material-icons').textContent = 'pause';
-              playBtn.classList.add('playing');
-              statusText.textContent = '● AO VIVO';
-              statusText.classList.add('live');
-              if (player.muted) player.muted = false;
-            }).catch(() => {
+            player.play().catch(() => {
               statusText.textContent = 'Falha na conexão';
               statusText.classList.remove('live');
             });
           }, 100);
         } else {
           player.pause();
-          isPlaying = false;
-          playBtn.querySelector('.material-icons').textContent = 'play_arrow';
-          playBtn.classList.remove('playing');
-          statusText.textContent = 'Disponível';
-          statusText.classList.remove('live');
         }
+      });
+
+      player.addEventListener('play', () => {
+        isPlaying = true;
+        playBtn.querySelector('.material-icons').textContent = 'pause';
+        playBtn.classList.add('playing');
+        statusText.textContent = '● AO VIVO';
+        statusText.classList.add('live');
+        if (player.muted) player.muted = false;
+      });
+
+      player.addEventListener('pause', () => {
+        isPlaying = false;
+        playBtn.querySelector('.material-icons').textContent = 'play_arrow';
+        playBtn.classList.remove('playing');
+        statusText.textContent = 'Disponível';
+        statusText.classList.remove('live');
       });
 
       volBtn.addEventListener('click', () => {
