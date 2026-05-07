@@ -22,6 +22,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
   <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
   <link rel="manifest" href="/favicon/site.webmanifest">
+  <link rel="stylesheet" href="/analytics.css">
 
   <link rel="canonical" href="https://atc.iguspotters.com.br/map">
   <meta name="robots" content="index, follow">
@@ -2175,6 +2176,43 @@
       }
     });
   </script>
+
+  <!-- ANALYTICS (hidden) -->
+  <div class="analytics-trigger" id="analyticsTrigger"></div>
+
+  <div class="analytics-login" id="analyticsLogin">
+    <div style="font-size:11px;color:var(--radar-text-dim);text-transform:uppercase;letter-spacing:1px;">Dashboard</div>
+    <input type="password" id="analyticsKeyInput" placeholder="Chave de acesso" autocomplete="off">
+    <button id="analyticsLoginBtn">Entrar</button>
+    <div class="login-error">Acesso negado</div>
+  </div>
+
+  <div class="analytics-panel" id="analyticsPanel">
+    <div class="analytics-header">
+      <h2>Analytics</h2>
+      <div class="analytics-header-actions">
+        <button onclick="window._analyticsModule.logout()" title="Sair">✕</button>
+      </div>
+    </div>
+    <div class="analytics-tabs">
+      <div class="analytics-tab active" data-analytics-tab="daily">Hoje</div>
+      <div class="analytics-tab" data-analytics-tab="period">Período</div>
+    </div>
+    <div class="analytics-content">
+      <div id="analyticsDaily"></div>
+      <div id="analyticsPeriod" style="display:none">
+        <div class="analytics-period-picker">
+          <input type="date" id="analyticsPeriodFrom">
+          <span style="color:var(--radar-text-dim)">→</span>
+          <input type="date" id="analyticsPeriodTo">
+          <button id="analyticsPeriodBtn">Buscar</button>
+        </div>
+        <div id="analyticsPeriodContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/analytics.js"></script>
 </body>
 
 </html>

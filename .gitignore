@@ -1,4 +1,8 @@
 *.code-workspace
+
+# Plans (internal docs)
+plans/
+
 # User-specific files
 *.rsuser
 *.suo
