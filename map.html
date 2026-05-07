@@ -803,11 +803,14 @@
       /* Botões de ação do mapa empilhados no mobile */
       .map-action-btns {
         flex-direction: column;
+        max-height: calc(100vh - 180px);
+        overflow-y: auto;
       }
 
       .map-action-btn {
         width: 30px;
         height: 30px;
+        flex-shrink: 0;
       }
 
       .map-action-btn .material-icons {
@@ -1605,7 +1608,7 @@
       { ident: 'VUGLA', lat: -25.59062, lng: -53.04800 },
     ];
 
-    const WAYPOINT_ZOOM_THRESHOLD = 13;
+    const WAYPOINT_ZOOM_THRESHOLD = 12;
     let waypointMarkers = [];
 
     function drawWaypoints() {
