@@ -77,28 +77,43 @@
 .analytics-panel {
   display: none;
   position: fixed;
-  top: 0;
-  right: 0;
-  width: 400px;
-  height: 100vh;
-  z-index: 10000;
+  top: 50px;
+  left: 10px;
+  width: 360px;
+  max-height: calc(100vh - 120px);
+  z-index: 1000;
   background: var(--radar-panel-bg);
-  border-left: 1px solid var(--radar-border);
+  border: 1px solid var(--radar-border);
+  border-radius: 4px;
   backdrop-filter: blur(12px);
   overflow-y: auto;
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
   font-size: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--radar-border) transparent;
 }
 
 .analytics-panel.visible {
   display: block;
-  transform: translateX(0);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .analytics-panel {
-    width: 100vw;
+    position: fixed;
+    top: 44px;
+    left: 0;
+    right: 0;
+    bottom: 60px;
+    width: 100%;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid var(--radar-border);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 1002;
+  }
+  .analytics-panel.visible {
+    transform: translateX(0);
   }
 }
 
@@ -146,32 +161,6 @@
   color: var(--radar-green);
   border-color: var(--radar-green);
   background: var(--radar-green-faint);
-}
-
-/* Tabs */
-.analytics-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--radar-border);
-}
-
-.analytics-tab {
-  flex: 1;
-  padding: 10px;
-  text-align: center;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--radar-text-dim);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.analytics-tab:hover { color: var(--radar-green); }
-
-.analytics-tab.active {
-  color: var(--radar-green);
-  border-bottom-color: var(--radar-green);
 }
 
 /* Content */
@@ -259,12 +248,46 @@
   margin-top: 16px;
 }
 
+.analytics-flights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
 .analytics-flights-title {
   font-size: 10px;
   color: var(--radar-text-dim);
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+
+.analytics-flights-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.analytics-filter-input {
+  width: 100%;
+  padding: 8px 10px;
   margin-bottom: 8px;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--radar-border);
+  border-radius: 4px;
+  color: var(--radar-text);
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  outline: none;
+}
+
+.analytics-filter-input:focus {
+  border-color: var(--radar-green);
+  box-shadow: 0 0 6px var(--radar-green-glow);
+}
+
+.analytics-filter-input::placeholder {
+  color: var(--radar-text-dim);
+  opacity: 0.6;
 }
 
 .flight-item {
@@ -276,10 +299,29 @@
   border-radius: 4px;
   margin-bottom: 4px;
   background: rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .flight-item:hover {
   background: var(--radar-green-faint);
+}
+
+.flight-item-plotted {
+  border-color: var(--radar-green);
+  background: var(--radar-green-faint);
+}
+
+.flight-item-plotted .flight-plot-indicator {
+  color: var(--radar-green);
+  text-shadow: 0 0 6px var(--radar-green-glow);
+}
+
+.flight-plot-indicator {
+  font-size: 14px;
+  color: var(--radar-text-dim);
+  min-width: 16px;
+  text-align: center;
 }
 
 .flight-info {
@@ -315,7 +357,115 @@
   border-color: var(--radar-green);
 }
 
+/* Period section (top of panel) */
+.analytics-period-section {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--radar-border);
+}
+
+.analytics-presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.preset-btn {
+  flex: 1;
+  padding: 6px 4px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--radar-border);
+  border-radius: 4px;
+  color: var(--radar-text-dim);
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.preset-btn:hover {
+  color: var(--radar-green);
+  border-color: var(--radar-green);
+}
+
+.preset-btn.active {
+  color: var(--radar-green);
+  border-color: var(--radar-green);
+  background: var(--radar-green-faint);
+  font-weight: 700;
+}
+
 /* Period picker */
+.analytics-search-section {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.analytics-search-input {
+  width: 100%;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--radar-border);
+  border-radius: 4px;
+  color: var(--radar-text);
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.analytics-search-input:focus {
+  border-color: var(--radar-green);
+  outline: none;
+}
+
+.analytics-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: var(--radar-panel-bg);
+  border: 1px solid var(--radar-border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--radar-border) transparent;
+}
+
+.analytics-search-results.visible {
+  display: block;
+}
+
+.analytics-search-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--radar-green-faint);
+  font-size: 11px;
+  transition: background 0.15s;
+}
+
+.analytics-search-item:hover {
+  background: var(--radar-green-faint);
+}
+
+.analytics-search-item:last-child {
+  border-bottom: none;
+}
+
+.analytics-search-item .search-callsign {
+  font-weight: 700;
+  color: var(--radar-green);
+}
+
+.analytics-search-item .search-meta {
+  color: var(--radar-text-dim);
+  font-size: 10px;
+  margin-top: 2px;
+}
+
 .analytics-period-picker {
   display: flex;
   gap: 8px;
@@ -358,23 +508,28 @@
 /* Clear trails button */
 .analytics-clear-btn {
   display: none;
-  width: 100%;
-  margin-top: 12px;
-  padding: 8px;
+  padding: 4px 8px;
   background: rgba(255, 50, 50, 0.1);
   border: 1px solid rgba(255, 50, 50, 0.4);
   border-radius: 4px;
   color: #ff4444;
   font-family: 'Roboto Mono', monospace;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   text-transform: uppercase;
 }
 
-.analytics-clear-btn.visible { display: block; }
+.analytics-clear-btn.visible { display: inline-block; }
 
 .analytics-clear-btn:hover {
   background: rgba(255, 50, 50, 0.2);
+}
+
+/* Trail end icon */
+.analytics-trail-end-icon {
+  background: none !important;
+  border: none !important;
+  white-space: nowrap;
 }
 
 /* Loading */

@@ -197,13 +197,69 @@
 
     /* ========== RANGE RINGS OVERLAY ========== */
     .range-ring-label {
+      background: none !important;
+      border: none !important;
+      overflow: visible !important;
       color: var(--radar-text-dim);
       font-size: 10px;
       font-family: 'Roboto Mono', monospace;
-      background: none;
-      border: none;
       white-space: nowrap;
       text-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    .range-ring-label span {
+      display: inline-block;
+      position: relative;
+      transform: translate(-50%, -50%);
+    }
+
+    .waypoint-marker-icon {
+      background: none !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+    .waypoint-marker-icon .wp-wrap {
+      display: flex;
+      align-items: center;
+      position: relative;
+      transform: translateY(-50%);
+      white-space: nowrap;
+    }
+    .waypoint-marker-icon .wp-symbol {
+      transform: translateX(-50%);
+    }
+    .waypoint-marker-icon .wp-label {
+      margin-left: 3px;
+    }
+
+    .airport-marker-icon {
+      background: none !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+    .airport-marker-icon .ap-wrap {
+      display: flex;
+      align-items: center;
+      position: relative;
+      transform: translateY(-50%);
+      white-space: nowrap;
+    }
+    .airport-marker-icon .ap-symbol {
+      transform: translateX(-50%);
+    }
+    .airport-marker-icon .ap-label {
+      margin-left: 4px;
+    }
+
+    .country-label {
+      background: none !important;
+      border: none !important;
+      overflow: visible !important;
+    }
+    .country-label span {
+      display: inline-block;
+      position: relative;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
     }
 
     /* ========== ALTITUDE LEGEND ========== */
@@ -863,6 +919,9 @@
       <button class="map-action-btn" id="bordersToggleBtn" title="Mostrar fronteiras">
         <span class="material-icons">public</span>
       </button>
+      <button class="map-action-btn" id="analyticsToggleBtn" title="Analytics" style="display:none">
+        <span class="material-icons">bar_chart</span>
+      </button>
       <button class="map-action-btn" id="fullscreenBtn" title="Tela cheia">
         <span class="material-icons">fullscreen</span>
       </button>
@@ -1267,6 +1326,7 @@
 
       drawRangeRings();
       drawAirportMarkers();
+      drawWaypoints();
     }
 
     // ==========================================
@@ -1370,8 +1430,8 @@
           icon: L.divIcon({
             className: 'country-label',
             html: `<span style="color:${tc.textDim};font-size:13px;font-weight:700;letter-spacing:4px;font-family:'Roboto Mono',monospace;text-shadow:0 0 6px rgba(0,0,0,0.9);">${c.name}</span>`,
-            iconSize: [120, 20],
-            iconAnchor: [60, 10]
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
           }),
           interactive: false
         }).addTo(map);
@@ -1446,9 +1506,9 @@
         L.marker([labelLat, SBFI.lng], {
           icon: L.divIcon({
             className: 'range-ring-label',
-            html: `${km}km`,
-            iconSize: [40, 14],
-            iconAnchor: [20, 7]
+            html: `<span>${km}km</span>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
           }),
           interactive: false
         }).addTo(rangeGroup);
@@ -1469,9 +1529,9 @@
         const label = L.marker([labelLat, SBFI.lng], {
           icon: L.divIcon({
             className: 'range-ring-label',
-            html: `${d.km}km`,
-            iconSize: [40, 14],
-            iconAnchor: [20, 7]
+            html: `<span>${d.km}km</span>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
           }),
           interactive: false
         });
@@ -1514,6 +1574,60 @@
     }
 
     // ==========================================
+    // WAYPOINTS / FIXES / NAVAIDS
+    // ==========================================
+    const WAYPOINTS = [
+      { ident: 'ILMED',   lat: -25.53117, lng: -54.57050 },
+      { ident: 'ANBAV',   lat: -25.38667, lng: -54.59650 },
+      { ident: 'OPLON',   lat: -25.48033, lng: -54.63533 },
+      { ident: 'FI386',   lat: -25.71117, lng: -54.33900 },
+      { ident: 'RWY15',   lat: -25.58938, lng: -54.49558 },
+      { ident: 'LOC IFI', lat: -25.60252, lng: -54.47850 },
+      { ident: 'ALDOS', lat: -26.23067, lng: -54.68867 },
+      { ident: 'ALGEL', lat: -25.87000, lng: -55.17050 },
+      { ident: 'COSTA', lat: -25.51200, lng: -55.23633 },
+      { ident: 'DIDOM', lat: -25.29833, lng: -53.18517 },
+      { ident: 'DORGU', lat: -25.62840, lng: -54.24111 },
+      { ident: 'EDREP', lat: -25.73620, lng: -54.22600 },
+      { ident: 'FI001', lat: -25.53500, lng: -54.56550 },
+      { ident: 'FI002', lat: -25.30117, lng: -54.35667 },
+      { ident: 'FI006', lat: -25.79633, lng: -54.72983 },
+      { ident: 'ILMIS', lat: -24.68009, lng: -53.05757 },
+      { ident: 'IVSOB', lat: -25.43067, lng: -53.81550 },
+      { ident: 'KAMIL', lat: -25.58733, lng: -53.76617 },
+      { ident: 'KOLNA', lat: -26.14250, lng: -54.09833 },
+      { ident: 'KOVSO', lat: -25.47583, lng: -54.02433 },
+      { ident: 'NELUP', lat: -25.83450, lng: -53.81933 },
+      { ident: 'OBMIX', lat: -25.33617, lng: -53.81950 },
+      { ident: 'UDENO', lat: -26.12467, lng: -54.93733 },
+      { ident: 'UPORU', lat: -25.22406, lng: -53.88206 },
+      { ident: 'UTBUB', lat: -26.63618, lng: -53.73611 },
+      { ident: 'VUGLA', lat: -25.59062, lng: -53.04800 },
+    ];
+
+    const WAYPOINT_ZOOM_THRESHOLD = 13;
+    let waypointMarkers = [];
+
+    function drawWaypoints() {
+      waypointMarkers.forEach(m => map.removeLayer(m));
+      waypointMarkers = [];
+      if (map.getZoom() < WAYPOINT_ZOOM_THRESHOLD) return;
+      const tc = getThemeColors();
+      WAYPOINTS.forEach(wp => {
+        const marker = L.marker([wp.lat, wp.lng], {
+          icon: L.divIcon({
+            className: 'waypoint-marker-icon',
+            html: `<div class="wp-wrap" style="color:${tc.textDim};font-size:9px;font-weight:500;font-family:'Roboto Mono',monospace;text-shadow:0 0 4px rgba(0,0,0,0.8);"><span class="wp-symbol">△</span><span class="wp-label">${wp.ident}</span></div>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
+          }),
+          interactive: false
+        }).addTo(rangeGroup);
+        waypointMarkers.push(marker);
+      });
+    }
+
+    // ==========================================
     // MARCADORES DE AEROPORTOS
     // ==========================================
     const AIRPORTS = [
@@ -1529,17 +1643,17 @@
     function drawAirportMarkers() {
       AIRPORTS.forEach(ap => {
         const tc = getThemeColors();
-        const style = ap.primary
+        const baseStyle = ap.primary
           ? `color:${tc.main};font-weight:700;font-size:12px;text-shadow:0 0 8px ${tc.textGlow};`
           : `color:${tc.textDim};font-weight:500;font-size:10px;text-shadow:0 0 4px rgba(0,0,0,0.8);`;
         const symbol = ap.primary ? '✦' : '✧';
 
         L.marker([ap.lat, ap.lng], {
           icon: L.divIcon({
-            className: 'range-ring-label',
-            html: `<span style="${style}">${symbol} ${ap.icao}</span>`,
-            iconSize: [60, 16],
-            iconAnchor: [30, 8]
+            className: 'airport-marker-icon',
+            html: `<div class="ap-wrap" style="${baseStyle}"><span class="ap-symbol">${symbol}</span><span class="ap-label">${ap.icao}</span></div>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
           }),
           interactive: false
         }).addTo(rangeGroup);
@@ -2021,6 +2135,7 @@
       zoomRings = [];
       drawRangeRings();
       drawAirportMarkers();
+      drawWaypoints();
 
       // Re-criar ícones de aeronaves existentes
       const zoom = map.getZoom();
@@ -2149,6 +2264,7 @@
             }
           }
         });
+        drawWaypoints();
       });
 
       // Refresh periódico
@@ -2191,24 +2307,30 @@
     <div class="analytics-header">
       <h2>Analytics</h2>
       <div class="analytics-header-actions">
-        <button onclick="window._analyticsModule.logout()" title="Sair">✕</button>
+        <button id="analyticsCloseBtn" title="Sair">✕</button>
       </div>
     </div>
-    <div class="analytics-tabs">
-      <div class="analytics-tab active" data-analytics-tab="daily">Hoje</div>
-      <div class="analytics-tab" data-analytics-tab="period">Período</div>
+    <div class="analytics-period-section">
+      <div class="analytics-search-section">
+        <input type="text" class="analytics-search-input" id="analyticsAircraftSearch" placeholder="Buscar aeronave (ICAO/callsign)..." autocomplete="off">
+        <div class="analytics-search-results" id="analyticsSearchResults"></div>
+      </div>
+      <div class="analytics-presets">
+        <button class="preset-btn" data-preset="0">Hoje</button>
+        <button class="preset-btn" data-preset="2">2D</button>
+        <button class="preset-btn" data-preset="7">7D</button>
+        <button class="preset-btn" data-preset="30">30D</button>
+        <button class="preset-btn" data-preset="90">90D</button>
+      </div>
+      <div class="analytics-period-picker">
+        <input type="date" id="analyticsPeriodFrom">
+        <span style="color:var(--radar-text-dim)">→</span>
+        <input type="date" id="analyticsPeriodTo">
+        <button id="analyticsPeriodBtn">Buscar</button>
+      </div>
     </div>
     <div class="analytics-content">
-      <div id="analyticsDaily"></div>
-      <div id="analyticsPeriod" style="display:none">
-        <div class="analytics-period-picker">
-          <input type="date" id="analyticsPeriodFrom">
-          <span style="color:var(--radar-text-dim)">→</span>
-          <input type="date" id="analyticsPeriodTo">
-          <button id="analyticsPeriodBtn">Buscar</button>
-        </div>
-        <div id="analyticsPeriodContent"></div>
-      </div>
+      <div id="analyticsContent"><div class="analytics-loading">Selecione um período ou busque uma aeronave</div></div>
     </div>
   </div>
 

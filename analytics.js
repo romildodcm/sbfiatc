@@ -11,8 +11,10 @@
 
   let triggerClicks = 0;
   let triggerTimer = null;
-  let analyticsTrails = [];
-  let currentTab = 'daily';
+  let analyticsTrails = {}; // { icaoKey: { layers: [], data: {} } }
+  let currentFlights = []; // cached flight list for current view
+  let filterText = '';
+  let activePreset = 0; // 0=today
 
   // ==========================================
   // AUTH
@@ -97,8 +99,9 @@
     if (valid) {
       setKey(key);
       hideLogin();
+      showToggleBtn();
       showPanel();
-      loadDailyData();
+      setPreset(0);
     } else {
       error.classList.add('visible');
       setTimeout(() => error.classList.remove('visible'), 2500);
@@ -118,24 +121,58 @@
     panel.classList.remove('visible');
   }
 
+  function showToggleBtn() {
+    const btn = document.getElementById('analyticsToggleBtn');
+    if (btn) btn.style.display = '';
+  }
+
+  function hideToggleBtn() {
+    const btn = document.getElementById('analyticsToggleBtn');
+    if (btn) btn.style.display = 'none';
+  }
+
+  let dataLoaded = false;
+
+  function togglePanel() {
+    const panel = document.getElementById('analyticsPanel');
+    if (panel.classList.contains('visible')) {
+      hidePanel();
+    } else {
+      showPanel();
+    }
+  }
+
   function logout() {
     clearKey();
     hidePanel();
-    clearTrails();
+    hideToggleBtn();
+    clearAllTrails();
+    dataLoaded = false;
   }
 
   // ==========================================
-  // TABS
+  // PERIOD PRESETS
   // ==========================================
-  function switchTab(tab) {
-    currentTab = tab;
-    document.querySelectorAll('.analytics-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`[data-analytics-tab="${tab}"]`).classList.add('active');
+  function getPresetRange(days) {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    return {
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+    };
+  }
 
-    document.getElementById('analyticsDaily').style.display = tab === 'daily' ? 'block' : 'none';
-    document.getElementById('analyticsPeriod').style.display = tab === 'period' ? 'block' : 'none';
-
-    if (tab === 'daily') loadDailyData();
+  function setPreset(days) {
+    activePreset = days;
+    const range = getPresetRange(days);
+    document.getElementById('analyticsPeriodFrom').value = range.from;
+    document.getElementById('analyticsPeriodTo').value = range.to;
+    // Highlight active preset
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`[data-preset="${days}"]`);
+    if (btn) btn.classList.add('active');
+    loadData();
   }
 
   // ==========================================
@@ -152,13 +189,37 @@
     return res.json();
   }
 
+  function isToday() {
+    const from = document.getElementById('analyticsPeriodFrom').value;
+    const to = document.getElementById('analyticsPeriodTo').value;
+    const today = new Date().toISOString().slice(0, 10);
+    return from === today && to === today;
+  }
+
+  function loadData() {
+    clearAllTrails();
+    if (isToday()) {
+      loadDailyData();
+    } else {
+      loadPeriodData();
+    }
+  }
+
   async function loadDailyData() {
-    const content = document.getElementById('analyticsDaily');
+    const content = document.getElementById('analyticsContent');
     content.innerHTML = '<div class="analytics-loading">Carregando...</div>';
 
-    const data = await fetchApi('/daily');
+    const today = new Date().toISOString().slice(0, 10);
+    const fromUtc = `${today}T00:00:00Z`;
+    const toUtc = `${today}T23:59:59Z`;
+
+    const [data, flightsData] = await Promise.all([
+      fetchApi('/daily'),
+      fetchApi(`/flights?from=${fromUtc}&to=${toUtc}&pageSize=200`),
+    ]);
     if (!data) return;
 
+    currentFlights = flightsData?.flights || [];
     renderDaily(data);
   }
 
@@ -170,7 +231,7 @@
 
     if (!from || !to) return;
 
-    const content = document.getElementById('analyticsPeriodContent');
+    const content = document.getElementById('analyticsContent');
     content.innerHTML = '<div class="analytics-loading">Carregando...</div>';
 
     const fromUtc = new Date(from + 'T00:00:00Z').toISOString();
@@ -178,62 +239,306 @@
 
     const [periodData, flightsData] = await Promise.all([
       fetchApi(`/period?from=${fromUtc}&to=${toUtc}`),
-      fetchApi(`/flights?from=${fromUtc}&to=${toUtc}&pageSize=100`),
+      fetchApi(`/flights?from=${fromUtc}&to=${toUtc}&pageSize=200`),
     ]);
 
-    renderPeriod(periodData, flightsData, content);
+    currentFlights = flightsData?.flights || [];
+    renderPeriod(periodData, content);
   }
 
-  async function loadFlightsForDay() {
-    const today = new Date().toISOString().slice(0, 10);
-    const fromUtc = `${today}T00:00:00Z`;
-    const toUtc = `${today}T23:59:59Z`;
+  // ==========================================
+  // TRAIL PLOTTING (matches live trail style)
+  // ==========================================
+  function getAltColor(altFt) {
+    // Mirror the live altitudeToColor function
+    const isRed = document.documentElement.getAttribute('data-theme') === 'red';
+    const a = Math.max(0, Math.min(45000, altFt || 0));
+    const t = a / 45000;
 
-    const data = await fetchApi(`/flights?from=${fromUtc}&to=${toUtc}&pageSize=100`);
-    return data;
+    if (isRed) {
+      const r = Math.round(80 + t * 175);
+      const g = Math.round(0 + t * 30);
+      const b = Math.round(0 + t * 20);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    const r = Math.round(0 + t * 30);
+    const g = Math.round(80 + t * 175);
+    const b = Math.round(0 + t * 20);
+    return `rgb(${r},${g},${b})`;
   }
 
-  async function plotFlight(icao, from, to) {
-    const data = await fetchApi(`/flights/${icao}/trail?from=${from}&to=${to}`);
+  function flightKey(flight) {
+    return `${flight.icaoHex}_${flight.startTime}`;
+  }
+
+  function isPlotted(flight) {
+    return !!analyticsTrails[flightKey(flight)];
+  }
+
+  async function toggleFlight(flight) {
+    const key = flightKey(flight);
+    if (analyticsTrails[key]) {
+      removePlot(key);
+    } else {
+      await plotFlight(flight);
+    }
+    renderFlightList();
+  }
+
+  async function plotFlight(flight, skipFit = false) {
+    const data = await fetchApi(`/flights/${flight.icaoHex}/trail?from=${flight.startTime}&to=${flight.endTime}`);
     if (!data || !data.trail || data.trail.length < 2) return;
 
-    const points = data.trail.map(p => [p.lat, p.lon]);
-    const polyline = L.polyline(points, {
-      color: '#ffd700',
-      weight: 3,
-      opacity: 0.8,
-      dashArray: '8, 4',
+    const key = flightKey(flight);
+    const layers = [];
+    const trail = data.trail;
+
+    // Draw segments colored by altitude (same as live)
+    for (let i = 0; i < trail.length - 1; i++) {
+      const p1 = trail[i];
+      const p2 = trail[i + 1];
+      const avgAlt = ((p1.alt || 0) + (p2.alt || 0)) / 2;
+      const color = getAltColor(avgAlt);
+
+      const line = L.polyline(
+        [[p1.lat, p1.lon], [p2.lat, p2.lon]],
+        {
+          color: color,
+          weight: 2.5,
+          opacity: 0.4 + (i / trail.length) * 0.6,
+          interactive: false,
+        }
+      ).addTo(map);
+      layers.push(line);
+    }
+
+    // Vertex dots
+    trail.forEach((p, i) => {
+      const opacity = 0.3 + (i / trail.length) * 0.7;
+      const circle = L.circleMarker([p.lat, p.lon], {
+        radius: 2,
+        color: getAltColor(p.alt || 0),
+        fillColor: getAltColor(p.alt || 0),
+        fillOpacity: opacity,
+        weight: 0,
+        interactive: false,
+      }).addTo(map);
+      layers.push(circle);
+    });
+
+    // Aircraft icon at the end of trail (last position)
+    const lastPt = trail[trail.length - 1];
+    const prevPt = trail[trail.length - 2];
+    const bearing = calcBearing(prevPt.lat, prevPt.lon, lastPt.lat, lastPt.lon);
+    const acColor = getAltColor(lastPt.alt || 0);
+    const svg = `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${bearing}deg)">
+      <polygon points="10,1 4,18 10,14 16,18" fill="${acColor}" fill-opacity="0.9" stroke="${acColor}" stroke-width="0.5"/>
+    </svg>`;
+    const label = flight.callsign || flight.icaoHex;
+    const endMarker = L.marker([lastPt.lat, lastPt.lon], {
+      icon: L.divIcon({
+        className: 'analytics-trail-end-icon',
+        html: `<div style="display:flex;align-items:center;gap:4px;">${svg}<span style="color:${acColor};font-size:9px;font-family:'Roboto Mono',monospace;white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,0.8);">${label}</span></div>`,
+        iconSize: [0, 0],
+        iconAnchor: [10, 10],
+      }),
+      interactive: false,
     }).addTo(map);
+    layers.push(endMarker);
 
-    // Start/end markers
-    const startMarker = L.circleMarker(points[0], {
-      radius: 5, color: '#00ff41', fillColor: '#00ff41', fillOpacity: 1,
-    }).addTo(map).bindTooltip(`${data.callsign || icao} — INÍCIO`, { permanent: false });
+    analyticsTrails[key] = { layers, data: flight };
 
-    const endMarker = L.circleMarker(points[points.length - 1], {
-      radius: 5, color: '#ff3333', fillColor: '#ff3333', fillOpacity: 1,
-    }).addTo(map).bindTooltip(`${data.callsign || icao} — FIM`, { permanent: false });
+    // Fit map (skip when plotting in batch)
+    if (!skipFit) {
+      const bounds = L.latLngBounds(trail.map(p => [p.lat, p.lon]));
+      map.fitBounds(bounds.pad(0.1));
+    }
 
-    analyticsTrails.push(polyline, startMarker, endMarker);
-
-    // Fit map to trail
-    map.fitBounds(polyline.getBounds().pad(0.1));
-
-    // Show clear button
-    document.getElementById('analyticsClearBtn').classList.add('visible');
+    updateClearBtn();
   }
 
-  function clearTrails() {
-    analyticsTrails.forEach(layer => map.removeLayer(layer));
-    analyticsTrails = [];
-    document.getElementById('analyticsClearBtn').classList.remove('visible');
+  function removePlot(key) {
+    if (!analyticsTrails[key]) return;
+    analyticsTrails[key].layers.forEach(l => map.removeLayer(l));
+    delete analyticsTrails[key];
+    updateClearBtn();
+  }
+
+  async function plotAllFlights() {
+    const filtered = getFilteredFlights();
+    for (const f of filtered) {
+      if (!isPlotted(f)) {
+        await plotFlight(f, true);
+      }
+    }
+    // Fit bounds to all plotted trails at once
+    const allPoints = [];
+    Object.values(analyticsTrails).forEach(t => {
+      t.layers.forEach(l => {
+        if (l.getLatLng) allPoints.push(l.getLatLng());
+        else if (l.getLatLngs) l.getLatLngs().forEach(p => allPoints.push(p));
+      });
+    });
+    if (allPoints.length > 0) {
+      map.fitBounds(L.latLngBounds(allPoints).pad(0.1));
+    }
+    renderFlightList();
+  }
+
+  function clearAllTrails() {
+    Object.keys(analyticsTrails).forEach(key => {
+      analyticsTrails[key].layers.forEach(l => map.removeLayer(l));
+    });
+    analyticsTrails = {};
+    updateClearBtn();
+    renderFlightList();
+  }
+
+  function updateClearBtn() {
+    const btn = document.getElementById('analyticsClearBtn');
+    if (btn) {
+      const hasTrails = Object.keys(analyticsTrails).length > 0;
+      btn.classList.toggle('visible', hasTrails);
+    }
+  }
+
+  function calcBearing(lat1, lon1, lat2, lon2) {
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+    const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+    return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+  }
+
+  // ==========================================
+  // FILTER
+  // ==========================================
+  function getFilteredFlights() {
+    if (!filterText) return currentFlights;
+    const q = filterText.toLowerCase();
+    return currentFlights.filter(f =>
+      (f.callsign && f.callsign.toLowerCase().includes(q)) ||
+      f.icaoHex.toLowerCase().includes(q)
+    );
+  }
+
+  function onFilterInput(e) {
+    filterText = e.target.value.trim();
+    renderFlightList();
+  }
+
+  // ==========================================
+  // AIRCRAFT SEARCH (uses /api/analytics/aircraft endpoint)
+  // ==========================================
+  let searchDebounceTimer = null;
+
+  function onAircraftSearchInput(e) {
+    const q = e.target.value.trim();
+    clearTimeout(searchDebounceTimer);
+
+    if (q.length < 2) {
+      hideSearchResults();
+      return;
+    }
+
+    searchDebounceTimer = setTimeout(() => searchAircraft(q), 400);
+  }
+
+  async function searchAircraft(q) {
+    const resultsEl = document.getElementById('analyticsSearchResults');
+    if (!resultsEl) return;
+
+    resultsEl.innerHTML = '<div class="analytics-search-item" style="color:var(--radar-text-dim)">Buscando...</div>';
+    resultsEl.classList.add('visible');
+
+    let url = `/aircraft?q=${encodeURIComponent(q)}`;
+    const from = document.getElementById('analyticsPeriodFrom').value;
+    const to = document.getElementById('analyticsPeriodTo').value;
+    if (from && to) {
+      url += `&from=${new Date(from + 'T00:00:00Z').toISOString()}&to=${new Date(to + 'T23:59:59Z').toISOString()}`;
+    }
+
+    const data = await fetchApi(url);
+    if (!data || !data.results || data.results.length === 0) {
+      resultsEl.innerHTML = '<div class="analytics-search-item" style="color:var(--radar-text-dim)">Nenhum resultado</div>';
+      return;
+    }
+
+    resultsEl.innerHTML = data.results.map(r => {
+      const label = r.callsign || r.icaoHex;
+      const firstSeen = new Date(r.firstSeen).toLocaleDateString('pt-BR');
+      const lastSeen = new Date(r.lastSeen).toLocaleDateString('pt-BR');
+      return `
+        <div class="analytics-search-item" data-icao="${r.icaoHex}">
+          <div class="search-callsign">${label} <span style="opacity:0.5;font-weight:400">(${r.icaoHex})</span></div>
+          <div class="search-meta">${r.flightCount} voos · ${formatNum(r.totalPositions)} pts · ${firstSeen}–${lastSeen}</div>
+        </div>`;
+    }).join('');
+
+    // Attach click listeners
+    resultsEl.querySelectorAll('.analytics-search-item[data-icao]').forEach(el => {
+      el.addEventListener('click', () => selectAircraftResult(el.dataset.icao));
+    });
+  }
+
+  function selectAircraftResult(icao) {
+    hideSearchResults();
+    document.getElementById('analyticsAircraftSearch').value = '';
+
+    // Get current period dates
+    const from = document.getElementById('analyticsPeriodFrom').value;
+    const to = document.getElementById('analyticsPeriodTo').value;
+
+    let fromUtc, toUtc;
+    if (from && to) {
+      fromUtc = new Date(from + 'T00:00:00Z').toISOString();
+      toUtc = new Date(to + 'T23:59:59Z').toISOString();
+    } else {
+      // Default to last 7 days
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 86400000);
+      fromUtc = weekAgo.toISOString();
+      toUtc = now.toISOString();
+    }
+
+    // Load flights filtered by this ICAO
+    loadFlightsForAircraft(icao, fromUtc, toUtc);
+  }
+
+  async function loadFlightsForAircraft(icao, fromUtc, toUtc) {
+    clearAllTrails();
+    const content = document.getElementById('analyticsContent');
+    content.innerHTML = '<div class="analytics-loading">Carregando voos...</div>';
+
+    const flightsData = await fetchApi(`/flights?from=${fromUtc}&to=${toUtc}&icao=${icao}&pageSize=200`);
+    currentFlights = flightsData?.flights || [];
+    filterText = '';
+
+    let html = `
+      <div class="analytics-stats">
+        <div class="stat-card"><div class="stat-num">${currentFlights.length}</div><div class="stat-label">Voos</div></div>
+        <div class="stat-card"><div class="stat-num">${icao}</div><div class="stat-label">ICAO</div></div>
+      </div>
+    `;
+    html += renderFlightSection();
+    content.innerHTML = html;
+    attachFlightListeners();
+  }
+
+  function hideSearchResults() {
+    const resultsEl = document.getElementById('analyticsSearchResults');
+    if (resultsEl) {
+      resultsEl.classList.remove('visible');
+      resultsEl.innerHTML = '';
+    }
   }
 
   // ==========================================
   // RENDER
   // ==========================================
   function renderDaily(data) {
-    const container = document.getElementById('analyticsDaily');
+    const container = document.getElementById('analyticsContent');
     const firstTime = data.firstActivity ? new Date(data.firstActivity).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--';
     const lastTime = data.lastActivity ? new Date(data.lastActivity).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--';
 
@@ -260,33 +565,14 @@
       html += `</div></div>`;
     }
 
-    // Flights
-    html += `<div class="analytics-flights"><div class="analytics-flights-title">Voos do Dia</div><div id="dailyFlightsList"></div></div>`;
-    html += `<button class="analytics-clear-btn" id="analyticsClearBtn" onclick="window._analyticsModule.clearTrails()">Limpar trails do mapa</button>`;
-    html += `<div class="analytics-logout"><button onclick="window._analyticsModule.logout()">Sair</button></div>`;
+    // Flight section with filter
+    html += renderFlightSection();
 
     container.innerHTML = html;
-
-    // Load flights
-    loadFlightsForDay().then(flightsData => {
-      const list = document.getElementById('dailyFlightsList');
-      if (!flightsData || !flightsData.flights || flightsData.flights.length === 0) {
-        list.innerHTML = '<div class="analytics-loading">Nenhum voo detectado</div>';
-        return;
-      }
-      list.innerHTML = renderFlightList(flightsData.flights);
-    });
-
-    // Re-show clear btn if trails exist
-    if (analyticsTrails.length > 0) {
-      setTimeout(() => {
-        const btn = document.getElementById('analyticsClearBtn');
-        if (btn) btn.classList.add('visible');
-      }, 0);
-    }
+    attachFlightListeners();
   }
 
-  function renderPeriod(periodData, flightsData, container) {
+  function renderPeriod(periodData, container) {
     if (!periodData) {
       container.innerHTML = '<div class="analytics-loading">Erro ao carregar dados</div>';
       return;
@@ -312,32 +598,106 @@
       html += `</div></div>`;
     }
 
-    // Flights
-    if (flightsData && flightsData.flights && flightsData.flights.length > 0) {
-      html += `<div class="analytics-flights"><div class="analytics-flights-title">Voos (${flightsData.totalFlights})</div>`;
-      html += renderFlightList(flightsData.flights);
-      html += `</div>`;
-    }
-
-    html += `<button class="analytics-clear-btn ${analyticsTrails.length > 0 ? 'visible' : ''}" id="analyticsClearBtn" onclick="window._analyticsModule.clearTrails()">Limpar trails do mapa</button>`;
+    // Flight section with filter
+    html += renderFlightSection();
 
     container.innerHTML = html;
+    attachFlightListeners();
   }
 
-  function renderFlightList(flights) {
+  function renderFlightSection() {
+    const filtered = getFilteredFlights();
+    const plotCount = Object.keys(analyticsTrails).length;
+
+    let html = `
+      <div class="analytics-flights">
+        <div class="analytics-flights-header">
+          <div class="analytics-flights-title">Voos (${currentFlights.length})</div>
+          <div class="analytics-flights-actions">
+            <button class="flight-plot-btn" id="analyticsPlotAll" title="Plotar todos">Plotar todos</button>
+            <button class="analytics-clear-btn ${plotCount > 0 ? 'visible' : ''}" id="analyticsClearBtn">Limpar (${plotCount})</button>
+          </div>
+        </div>
+        <input type="text" class="analytics-filter-input" id="analyticsFilter" placeholder="Filtrar voo (callsign/ICAO)..." value="${filterText}">
+        <div id="analyticsFlightList">
+    `;
+
+    html += buildFlightListHtml(filtered);
+    html += `</div></div>`;
+
+    // Logout
+    html += `<div class="analytics-logout"><button id="analyticsLogoutBtn">Sair</button></div>`;
+
+    return html;
+  }
+
+  function buildFlightListHtml(flights) {
+    if (flights.length === 0) {
+      return '<div class="analytics-loading">Nenhum voo encontrado</div>';
+    }
     return flights.map(f => {
       const start = new Date(f.startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       const end = new Date(f.endTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       const label = f.callsign || f.icaoHex;
+      const plotted = isPlotted(f);
+      const plottedClass = plotted ? 'flight-item-plotted' : '';
       return `
-        <div class="flight-item">
+        <div class="flight-item ${plottedClass}" data-flight-key="${flightKey(f)}" data-flight-idx="${currentFlights.indexOf(f)}">
           <div class="flight-info">
             <span class="flight-callsign">${label} <span style="opacity:0.5;font-size:10px">(${f.icaoHex})</span></span>
             <span class="flight-meta">${start}–${end} · ${f.durationMinutes}min · ${f.positionCount} pts · FL${f.maxAltitude ? Math.round(f.maxAltitude / 100) : '?'}</span>
           </div>
-          <button class="flight-plot-btn" onclick="window._analyticsModule.plotFlight('${f.icaoHex}','${f.startTime}','${f.endTime}')">Ver</button>
+          <span class="flight-plot-indicator">${plotted ? '●' : '○'}</span>
         </div>`;
     }).join('');
+  }
+
+  function renderFlightList() {
+    const listEl = document.getElementById('analyticsFlightList');
+    if (!listEl) return;
+    const filtered = getFilteredFlights();
+    listEl.innerHTML = buildFlightListHtml(filtered);
+    attachFlightItemListeners();
+    updateClearBtn();
+
+    // Update plotAll and clear button text
+    const clearBtn = document.getElementById('analyticsClearBtn');
+    if (clearBtn) {
+      const count = Object.keys(analyticsTrails).length;
+      clearBtn.textContent = `Limpar (${count})`;
+      clearBtn.classList.toggle('visible', count > 0);
+    }
+  }
+
+  function attachFlightListeners() {
+    // Filter
+    const filterInput = document.getElementById('analyticsFilter');
+    if (filterInput) filterInput.addEventListener('input', onFilterInput);
+
+    // Plot all
+    const plotAllBtn = document.getElementById('analyticsPlotAll');
+    if (plotAllBtn) plotAllBtn.addEventListener('click', plotAllFlights);
+
+    // Clear
+    const clearBtn = document.getElementById('analyticsClearBtn');
+    if (clearBtn) clearBtn.addEventListener('click', clearAllTrails);
+
+    // Logout
+    const logoutBtn = document.getElementById('analyticsLogoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+    attachFlightItemListeners();
+  }
+
+  function attachFlightItemListeners() {
+    document.querySelectorAll('#analyticsFlightList .flight-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.flightIdx);
+        if (currentFlights[idx]) {
+          toggleFlight(currentFlights[idx]);
+        }
+      });
+    });
   }
 
   function formatNum(n) {
@@ -359,24 +719,41 @@
       if (e.key === 'Enter') handleLogin();
     });
 
-    // Tabs
-    document.querySelectorAll('.analytics-tab').forEach(tab => {
-      tab.addEventListener('click', () => switchTab(tab.dataset.analyticsTab));
+    // Close button (hides panel, does not logout)
+    const closeBtn = document.getElementById('analyticsCloseBtn');
+    if (closeBtn) closeBtn.addEventListener('click', hidePanel);
+
+    // Toggle button
+    const toggleBtn = document.getElementById('analyticsToggleBtn');
+    if (toggleBtn) toggleBtn.addEventListener('click', togglePanel);
+
+    // Period presets
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => setPreset(parseInt(btn.dataset.preset)));
     });
 
-    // Period search
+    // Period manual search
     const periodBtn = document.getElementById('analyticsPeriodBtn');
     if (periodBtn) periodBtn.addEventListener('click', loadPeriodData);
 
-    // Auto-show if key exists
+    // Aircraft search
+    const searchInput = document.getElementById('analyticsAircraftSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', onAircraftSearchInput);
+      // Hide results on click outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.analytics-search-section')) hideSearchResults();
+      });
+    }
+
+    // Show toggle button if key exists (panel stays closed)
     if (getKey()) {
-      showPanel();
-      loadDailyData();
+      showToggleBtn();
     }
   }
 
   // Expose needed functions globally for onclick handlers
-  window._analyticsModule = { plotFlight, clearTrails, logout };
+  window._analyticsModule = { logout, clearAllTrails };
 
   // Wait for DOM and map
   if (document.readyState === 'loading') {
