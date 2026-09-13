@@ -304,13 +304,13 @@
     }
 
     .record-card:hover {
-      border-color: #ff3b30;
+      border-color: var(--radar-green);
       color: var(--radar-green);
     }
 
     .record-card .material-icons {
       font-size: 18px;
-      color: #ff3b30;
+      color: var(--radar-green);
       flex-shrink: 0;
     }
 
@@ -321,7 +321,7 @@
     }
 
     .record-card .record-label.warn {
-      color: #ffb020;
+      color: var(--radar-green);
       text-transform: none;
     }
 
@@ -329,12 +329,14 @@
       display: none;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-weight: 600;
-      color: #ff3b30;
+      color: var(--radar-green);
       letter-spacing: 0.5px;
     }
 
     .record-card.recording {
-      border-color: #ff3b30;
+      border-color: var(--radar-green);
+      background: var(--radar-green-faint);
+      color: var(--radar-green);
     }
 
     .record-card.recording .record-counter {
