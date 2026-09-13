@@ -12,7 +12,13 @@
 
    Independe do player: grava com o áudio tocando ou não.
 
-   Uso:
+   Uso: a faixa precisa existir na página (veja index.html):
+     <button class="radar-card record-card" id="recordBtn" type="button">
+       <span class="material-icons">fiber_manual_record</span>
+       <span class="record-label" id="recordLabel">Gravar Fonia ATC</span>
+       <span class="record-counter" id="recordCounter"></span>
+     </button>
+   e o script ser carregado:
      <script src="/radio-recorder.js" defer></script>
 
    Ajustes opcionais (declarar antes deste script):
@@ -35,7 +41,11 @@
     debug: /[?&]radio_rec_debug=1/.test(window.location.search),
   }, window.SBFI_RADIO_RECORDER || {});
 
+  var LABEL_IDLE = 'Gravar Fonia ATC';
+  var LABEL_RECORDING = 'Gravando Fonia ATC';
+
   var btn = null;
+  var label = null;
   var counter = null;
   var recording = false;
   var chunks = [];
@@ -178,80 +188,50 @@
   /* ------------------------------------------------------------------ */
   /* INTERFACE                                                           */
   /* ------------------------------------------------------------------ */
-  function injectStyles() {
-    if (document.getElementById('recordBtnStyles')) return;
-    var style = document.createElement('style');
-    style.id = 'recordBtnStyles';
-    style.textContent = [
-      '.record-btn .material-icons { color: #ff3b30; }',
-      '.record-btn:hover .material-icons { color: #ff5f57; }',
-      '.record-btn.recording .material-icons { animation: recPulse 1.2s ease-in-out infinite; }',
-      '@keyframes recPulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }',
-      '.record-counter {',
-      '  display: none; margin-left: 4px; white-space: nowrap;',
-      '  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;',
-      '  color: #ff3b30; letter-spacing: .3px;',
-      '}',
-      '.record-counter.visible { display: inline-block; }',
-      '.record-counter.warn { color: #ffb020; }',
-    ].join('\n');
-    document.head.appendChild(style);
+  function setup() {
+    btn = document.getElementById('recordBtn');
+    label = document.getElementById('recordLabel');
+    counter = document.getElementById('recordCounter');
+    if (!btn) {
+      log('sem #recordBtn na página: gravador não iniciado');
+      return;
+    }
+    btn.addEventListener('click', onButtonClick);
+    setUi(false);
+    log('gravador pronto');
   }
 
-  function buildUi() {
-    var panel = document.querySelector('.audio-panel');
-    if (!panel) return false;
-
-    injectStyles();
-
-    var host = panel.querySelector('.volume-control') || panel;
-
-    btn = document.createElement('button');
-    btn.id = 'recordBtn';
-    btn.className = 'record-btn';
-    btn.type = 'button';
-    btn.title = 'Gravar fonia (MP3)';
-    btn.setAttribute('aria-label', 'Gravar fonia');
-    btn.innerHTML = '<span class="material-icons">fiber_manual_record</span>';
-    btn.addEventListener('click', onButtonClick);
-
-    counter = document.createElement('span');
-    counter.className = 'record-counter';
-    counter.setAttribute('aria-live', 'polite');
-
-    host.appendChild(btn);
-    host.appendChild(counter);
-    log('botão de gravação adicionado ao painel do player');
-    return true;
+  function setLabel(text) {
+    if (label) label.textContent = text;
   }
 
   function setUi(state) {
-    if (!btn || !counter) return;
+    if (!btn) return;
     btn.classList.toggle('recording', state);
     btn.title = state ? 'Parar gravação e baixar o MP3' : 'Gravar fonia (MP3)';
-    btn.setAttribute('aria-label', state ? 'Parar gravação e baixar o MP3' : 'Gravar fonia');
-    btn.querySelector('.material-icons').textContent = state ? 'stop' : 'fiber_manual_record';
-    counter.classList.toggle('visible', state);
-    counter.classList.remove('warn');
-    if (!state) counter.textContent = '';
+    btn.setAttribute('aria-label', state ? 'Parar gravação e baixar o MP3' : 'Gravar fonia (MP3)');
+    setLabel(state ? LABEL_RECORDING : LABEL_IDLE);
+    if (label) label.classList.remove('warn');
+    if (counter) counter.textContent = '';
   }
 
   function tick() {
     if (!recording || !counter) return;
     var elapsed = Date.now() - startedAt;
-    counter.textContent = 'REC ' + formatTime(elapsed) + ' · ' + formatSize(totalBytes);
+    counter.textContent = formatTime(elapsed);
     if (elapsed > CONFIG.maxMinutes * 60000) stop(true, 'Limite de ' + CONFIG.maxMinutes + ' min atingido');
   }
 
+  // Mostra o resultado por alguns segundos no próprio rótulo da faixa
   function flash(message) {
-    if (!counter) return;
+    if (!label) return;
     clearTimeout(msgTimer);
-    counter.textContent = message;
-    counter.classList.add('visible', 'warn');
+    setLabel(message);
+    label.classList.add('warn');
     msgTimer = setTimeout(function () {
       if (!recording) {
-        counter.classList.remove('visible', 'warn');
-        counter.textContent = '';
+        label.classList.remove('warn');
+        setLabel(LABEL_IDLE);
       }
     }, 4000);
   }
@@ -339,14 +319,10 @@
   /* ------------------------------------------------------------------ */
   /* INICIALIZAÇÃO                                                       */
   /* ------------------------------------------------------------------ */
-  function init() {
-    if (!buildUi()) return;
-  }
-
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', setup);
   } else {
-    init();
+    setup();
   }
 
   // API pública (testes/automação/atalhos)
