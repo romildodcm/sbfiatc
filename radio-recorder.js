@@ -10,7 +10,17 @@
    Vantagens: MP3 de verdade, sem re-codificação, sem perda de qualidade,
    CPU quase zero e funciona no iPhone. Custo: uma conexão extra de ~4 KB/s.
 
-   Independe do player: grava com o áudio tocando ou não.
+   PRÉ-ROLL: o Icecast não devolve áudio antigo — o máximo que ele entrega de
+   saída é o "burst" inicial (64 KB, ~16 s). Para a gravação incluir o que
+   motivou o clique, o módulo mantém essa conexão viva enquanto a página toca
+   e guarda os bytes crus numa memória circular com os últimos
+   preRollMinutes. Ao clicar em gravar, o conteúdo do buffer entra como
+   começo do arquivo e a captura segue ao vivo até parar.
+   Como o stream é CBR, bytes são um relógio confiável: a 32 kbps, 2 minutos
+   ocupam ~480 KB de memória — nada para o navegador.
+
+   Independe do player para gravar, mas o buffer só liga quando o áudio toca
+   (quem só abre a página não abre conexão extra no servidor).
 
    Uso: o botão e os elementos de estado precisam existir na página (index.html):
      <button class="record-btn" id="recordBtn" type="button"
@@ -37,10 +47,14 @@
 
   var CONFIG = Object.assign({
     streamUrl: 'https://ic.io.tec.br/sbfi',
-    maxMinutes: 240,     // trava de segurança (~14 MB por hora, em 32 kbps)
-    minBytes: 4096,      // abaixo disso foi curto demais (~1s) para valer arquivo
-    retryDelayMs: 2000,  // espera entre tentativas se a conexão cair
+    maxMinutes: 240,        // trava de segurança (~14 MB por hora, em 32 kbps)
+    minBytes: 4096,         // abaixo disso foi curto demais (~1s) para valer arquivo
+    retryDelayMs: 2000,     // espera entre tentativas se a conexão cair
     maxRetries: 5,
+    // Quanto do que já tocou entra na gravação (o "pré-roll")
+    preRollMinutes: 2,
+    bytesPerSecond: 4096,    // 32 kbps -> 4 KB/s: é o relógio do buffer circular
+    maxBufferBytes: 2097152, // teto de segurança se o stream subir de bitrate
     debug: /[?&]radio_rec_debug=1/.test(window.location.search),
   }, window.SBFI_RADIO_RECORDER || {});
 
@@ -50,14 +64,23 @@
   var btn = null;
   var label = null;
   var counter = null;
+  var player = null;
   var recording = false;
-  var chunks = [];
+  var chunks = [];              // arquivo em construção (pré-roll + ao vivo)
   var totalBytes = 0;
   var startedAt = 0;
-  var controller = null;
   var tickTimer = null;
   var msgTimer = null;
+  var pauseTimer = null;
   var failures = 0;
+
+  // Buffer circular do pré-roll: só existe enquanto a página toca
+  var buffer = [];              // pedaços de MP3, do mais antigo ao mais novo
+  var bufferBytes = 0;
+  var buffering = false;        // o player está tocando?
+  var collecting = false;       // a conexão de coleta está de pé?
+  var collectController = null;
+  var preRollBytesIncluded = 0; // quanto de pré-roll entrou na gravação atual
 
   /* ------------------------------------------------------------------ */
   /* UTILITÁRIOS                                                         */
@@ -105,7 +128,56 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* CAPTURA DOS BYTES                                                   */
+  /* PRÉ-ROLL: MEMÓRIA CIRCULAR DO QUE JÁ TOCOU                          */
+  /* ------------------------------------------------------------------ */
+  function msOf(bytes) {
+    return Math.round(bytes / CONFIG.bytesPerSecond * 1000);
+  }
+
+  function preRollLimit() {
+    return Math.round(CONFIG.preRollMinutes * 60 * CONFIG.bytesPerSecond);
+  }
+
+  // Joga fora o mais antigo até caber na janela (e até o teto de segurança)
+  function trimBuffer() {
+    var limite = preRollLimit();
+    while (buffer.length > 1 && (bufferBytes > limite || bufferBytes > CONFIG.maxBufferBytes)) {
+      bufferBytes -= buffer[0].length;
+      buffer.shift();
+    }
+  }
+
+  function clearBuffer() {
+    buffer = [];
+    bufferBytes = 0;
+  }
+
+  function bufferState() {
+    return {
+      collecting: collecting,
+      buffering: buffering,
+      bytes: bufferBytes,
+      seconds: Math.round(msOf(bufferBytes) / 1000),
+      targetSeconds: CONFIG.preRollMinutes * 60,
+    };
+  }
+
+  // Cada pedaço que chega vai para o buffer circular e, se houver gravação
+  // em andamento, também para o arquivo.
+  function feed(bytes) {
+    if (!bytes || !bytes.length) return;
+    buffer.push(bytes);
+    bufferBytes += bytes.length;
+    trimBuffer();
+    if (recording) {
+      chunks.push(bytes);
+      totalBytes += bytes.length;
+    }
+    failures = 0;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* COLETOR: UMA CONEXÃO QUE ALIMENTA O BUFFER E A GRAVAÇÃO             */
   /* ------------------------------------------------------------------ */
   async function drain(signal) {
     var res = await fetch(streamUrl(), { mode: 'cors', cache: 'no-store', signal: signal });
@@ -115,33 +187,57 @@
     for (;;) {
       var r = await reader.read();
       if (r.done) break;
-      if (r.value && r.value.length) {
-        chunks.push(r.value);
-        totalBytes += r.value.length;
-        failures = 0;
-      }
+      feed(r.value);
     }
   }
 
   async function run(signal) {
-    while (recording) {
+    while (collecting) {
       try {
         await drain(signal);
       } catch (e) {
-        if (!recording || (e && e.name === 'AbortError')) return;
+        if (!collecting || (e && e.name === 'AbortError')) return;
         failures += 1;
         log('falha na conexão (' + failures + '/' + CONFIG.maxRetries + '):', e.message);
         if (failures > CONFIG.maxRetries) {
-          stop(true, 'A conexão caiu e não voltou');
+          // Gravar sem conexão não faz sentido; o buffer é conveniência
+          if (recording) stop(true, 'A conexão caiu e não voltou');
+          else { log('desistindo do buffer após ' + failures + ' falhas'); stopCollector(); }
           return;
         }
         await delay(CONFIG.retryDelayMs * failures);
         continue;
       }
-      // O stream terminou sozinho: se ainda estamos gravando, reconecta
-      if (!recording) return;
+      // O stream terminou sozinho: se ainda precisamos dele, reconecta
+      if (!collecting) return;
       await delay(500);
     }
+  }
+
+  // O coletor fica de pé enquanto o player toca ou enquanto há gravação
+  function updateCollector() {
+    var need = recording || buffering;
+    if (need && !collecting) startCollector();
+    else if (!need && collecting) stopCollector();
+  }
+
+  function startCollector() {
+    if (collecting) return;
+    collecting = true;
+    failures = 0;
+    collectController = new AbortController();
+    log('coletor ligado');
+    run(collectController.signal);
+  }
+
+  function stopCollector() {
+    if (!collecting) return;
+    collecting = false;
+    if (collectController) {
+      try { collectController.abort(); } catch (e) { /* ignora */ }
+      collectController = null;
+    }
+    log('coletor desligado');
   }
 
   /* ------------------------------------------------------------------ */
@@ -206,7 +302,44 @@
 
     btn.addEventListener('click', onButtonClick);
     setUi(false);
+    setupPlayer();
     log('gravador pronto');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* PLAYER: É ELE QUE DIZ QUANDO O BUFFER DEVE ESTAR LIGADO             */
+  /* ------------------------------------------------------------------ */
+  function setupPlayer() {
+    player = document.getElementById('radioPlayer');
+    if (!player) {
+      log('sem #radioPlayer na página: pré-roll desligado (gravar segue funcionando)');
+      return;
+    }
+    player.addEventListener('playing', onPlayerPlaying);
+    player.addEventListener('pause', onPlayerPaused);
+    if (!player.paused) onPlayerPlaying();   // já tocava quando o script carregou
+  }
+
+  function onPlayerPlaying() {
+    clearTimeout(pauseTimer);
+    if (buffering) return;
+    buffering = true;
+    log('player tocando: buffer de pré-roll ligado');
+    updateCollector();
+  }
+
+  // O player se reconecta sozinho e pode disparar "pause" no meio da
+  // reprodução. Só desligamos o buffer se ele seguir parado depois de um tempo.
+  function onPlayerPaused() {
+    clearTimeout(pauseTimer);
+    pauseTimer = setTimeout(function () {
+      if (player && !player.paused) return;
+      if (!buffering) return;
+      buffering = false;
+      clearBuffer();   // pausa longa: o passado guardado não serve mais
+      log('player parado: buffer de pré-roll desligado');
+      updateCollector();
+    }, 1500);
   }
 
   function setLabel(text) {
@@ -216,32 +349,34 @@
   function setUi(state) {
     if (!btn) return;
     btn.classList.toggle('recording', state);
-    btn.title = state ? 'Parar gravação e baixar o MP3' : 'Gravar fonia (MP3)';
+    // Sem title: quem explica o botão é o tooltip estilizado (.record-tip)
     btn.setAttribute('aria-label', state ? 'Parar gravação e baixar o MP3' : 'Gravar fonia (MP3)');
     setLabel(state ? LABEL_RECORDING : LABEL_IDLE);
     if (label) label.classList.remove('warn');
     if (counter) counter.textContent = '';
   }
 
+  // O contador mostra o tempo TOTAL do arquivo, não só o que falta gravar: o
+  // pré-roll já entra na conta desde o primeiro segundo, que é exatamente o
+  // que o arquivo vai ter quando for baixado.
   function tick() {
     if (!recording || !counter) return;
     var elapsed = Date.now() - startedAt;
-    counter.textContent = formatTime(elapsed);
+    counter.textContent = formatTime(elapsed + msOf(preRollBytesIncluded));
     if (elapsed > CONFIG.maxMinutes * 60000) stop(true, 'Limite de ' + CONFIG.maxMinutes + ' min atingido');
   }
 
   // Mostra o resultado por alguns segundos no próprio rótulo da faixa
-  function flash(message) {
+  function flash(message, ms) {
     if (!label) return;
     clearTimeout(msgTimer);
     setLabel(message);
     label.classList.add('warn');
     msgTimer = setTimeout(function () {
-      if (!recording) {
-        label.classList.remove('warn');
-        setLabel(LABEL_IDLE);
-      }
-    }, 4000);
+      label.classList.remove('warn');
+      // Durante a gravação o rótulo precisa voltar para "Gravando"
+      setLabel(recording ? LABEL_RECORDING : LABEL_IDLE);
+    }, ms || 4000);
   }
 
   /* ------------------------------------------------------------------ */
@@ -254,36 +389,52 @@
 
   function start() {
     if (recording) return;
+
+    // O que já está no buffer entra como começo do arquivo: é justamente o
+    // trecho que motivou o clique. Menos que uns poucos frames não vale nada.
+    var seed = buffer.slice();
+    var seedBytes = bufferBytes;
+    if (seedBytes < 512) { seed = []; seedBytes = 0; }
+
     recording = true;
-    chunks = [];
-    totalBytes = 0;
+    chunks = seed;
+    totalBytes = seedBytes;
+    preRollBytesIncluded = seedBytes;
     failures = 0;
     startedAt = Date.now();
-    controller = new AbortController();
 
     setUi(true);
     tick();
     tickTimer = setInterval(tick, 1000);
-    log('gravação iniciada');
-    track('radio_record_start', { trigger: 'button' });
+    updateCollector();   // garante o coletor mesmo com o player parado
+    log('gravação iniciada' +
+      (preRollBytesIncluded ? ' com ' + formatTime(msOf(preRollBytesIncluded)) + ' de pré-roll' : ''));
+    track('radio_record_start', {
+      trigger: 'button',
+      pre_roll_seconds: Math.round(msOf(preRollBytesIncluded) / 1000)
+    });
 
-    run(controller.signal);
+    // Avisa na própria faixa que o passado entrou (no celular não existe hover,
+    // então o tooltip sozinho não daria conta)
+    if (preRollBytesIncluded > 3 * CONFIG.bytesPerSecond) {
+      flash('Inclui ' + formatTime(msOf(preRollBytesIncluded)) + ' anteriores', 3500);
+    }
   }
 
   function stop(automatic, message) {
     if (!recording) return;
     recording = false;
 
-    if (controller) {
-      try { controller.abort(); } catch (e) { /* ignora */ }
-      controller = null;
-    }
     clearInterval(tickTimer);
     tickTimer = null;
     setUi(false);
+    updateCollector();   // acabou a gravação: o coletor só fica se o player toca
 
     var elapsed = Date.now() - startedAt;
-    log('gravação parada:', formatTime(elapsed), formatSize(totalBytes), message || '');
+    var totalMs = elapsed + msOf(preRollBytesIncluded);
+    log('gravação parada:', formatTime(elapsed), formatSize(totalBytes),
+      preRollBytesIncluded ? 'pré-roll ' + formatTime(msOf(preRollBytesIncluded)) : '',
+      message || '');
 
     if (totalBytes < CONFIG.minBytes) {
       flash(message || 'Gravação muito curta');
@@ -295,6 +446,7 @@
       });
       chunks = [];
       totalBytes = 0;
+      preRollBytesIncluded = 0;
       return;
     }
 
@@ -302,16 +454,19 @@
     download(bytes);
     track('radio_record_stop', {
       record_seconds: Math.round(elapsed / 1000),
+      pre_roll_seconds: Math.round(msOf(preRollBytesIncluded) / 1000),
+      file_seconds: Math.round(totalMs / 1000),
       record_bytes: bytes.length,
       file_kb: Math.round(bytes.length / 1024),
       ended_by: automatic ? 'auto' : 'user'
     });
 
     if (message) flash(message);
-    else flash('Salvo: ' + formatTime(elapsed) + ' · ' + formatSize(bytes.length));
+    else flash('Salvo: ' + formatTime(totalMs) + ' · ' + formatSize(bytes.length));
 
     chunks = [];
     totalBytes = 0;
+    preRollBytesIncluded = 0;
   }
 
   function beforeUnload(e) {
@@ -338,7 +493,16 @@
     start: start,
     stop: function () { stop(false); },
     isRecording: function () { return recording; },
-    stats: function () { return { bytes: totalBytes, seconds: recording ? (Date.now() - startedAt) / 1000 : 0, chunks: chunks.length }; },
+    stats: function () {
+      return {
+        bytes: totalBytes,
+        seconds: recording ? (Date.now() - startedAt) / 1000 : 0,
+        chunks: chunks.length,
+        preRollBytes: preRollBytesIncluded,
+        preRollSeconds: Math.round(msOf(preRollBytesIncluded) / 1000)
+      };
+    },
+    buffer: bufferState,
     config: CONFIG,
   };
 })();
