@@ -169,19 +169,164 @@
       width: 100%;
     }
 
-    /* ========== PLAYER ========== */
-    .audio-panel {
+    /* ========== PLAYER QUADRADO (inspirado no app Android) ========== */
+    .player-square {
+      position: relative;
+      width: 100%;
+      max-width: 340px;
+      margin: 0 auto;
+      aspect-ratio: 1 / 1;
+      padding: 48px 0 76px;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 14px;
+      justify-content: center;
+      overflow: hidden;
+      background: var(--radar-panel-bg);
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
     }
 
-    .audio-panel .play-btn {
-      width: 44px;
-      height: 44px;
+    /* Ícone do site ao fundo — como o card do app Android */
+    .player-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.22;
+      pointer-events: none;
+    }
+
+    /* Fade sobre a imagem (equivalente ao fade_overlay do Android) */
+    .player-fade {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(10, 10, 10, 0) 0%, rgba(10, 10, 10, 0.72) 72%),
+        linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(10, 10, 10, 0.15) 45%, rgba(10, 10, 10, 0.9) 100%);
+    }
+
+    /* Meio do quadrado: waveform + estado */
+    .player-center {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .waveform {
+      display: block;
+      width: 100%;
+      height: 84px;
+    }
+
+    .player-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 18px;
+      margin-top: 12px;
+    }
+
+    .player-status .status-text {
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .player-status .status-text.live {
+      animation: pulse-text 2s infinite;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--radar-green);
+      box-shadow: 0 0 6px var(--radar-green-glow);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .player-square.playing .live-dot,
+    .player-square:has(.play-btn.playing) .live-dot {
+      opacity: 1;
+      animation: pulse-text 1.4s infinite;
+    }
+
+    @keyframes pulse-text {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Linha do REC — só aparece gravando; altura reservada p/ não deslocar */
+    .rec-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 16px;
+      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .rec-status .record-label:empty,
+    .rec-status .record-counter:empty {
+      display: none;
+    }
+
+    .rec-status .record-counter {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .rec-status .record-label.warn {
+      color: var(--radar-green);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      text-transform: none;
+    }
+
+    /* Rodapé do quadrado: nome da fonia, gravar, play */
+    .player-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+    }
+
+    .player-bottom .channel-name {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+      text-shadow: 0 0 8px var(--radar-green-glow);
+    }
+
+    .play-btn {
+      width: 46px;
+      height: 46px;
       border-radius: 50%;
       border: 2px solid var(--radar-green);
-      background: transparent;
+      background: rgba(10, 10, 10, 0.45);
       color: var(--radar-green);
       cursor: pointer;
       display: flex;
@@ -191,43 +336,27 @@
       transition: all 0.2s;
     }
 
-    .audio-panel .play-btn:hover {
+    .play-btn:hover,
+    .play-btn.playing {
       background: var(--radar-green-faint);
+      box-shadow: 0 0 12px var(--radar-green-glow);
     }
 
-    .audio-panel .play-btn.playing {
-      background: var(--radar-green-faint);
-    }
-
-    .audio-panel .play-btn .material-icons {
-      font-size: 22px;
+    .play-btn .material-icons {
+      font-size: 24px;
       color: var(--radar-green);
     }
 
-    .audio-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .audio-info .label {
-      font-size: 12px;
-      color: var(--radar-text-dim);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .audio-info .status-text {
-      font-size: 14px;
-      color: var(--radar-green);
-    }
-
-    .audio-info .status-text.live {
-      animation: pulse-text 2s infinite;
-    }
-
-    @keyframes pulse-text {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+    /* Volume no topo direito (mesma posição do botão de info do Android) */
+    .player-volume {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      z-index: 2;
+      padding: 2px 8px;
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+      background: rgba(10, 10, 10, 0.4);
     }
 
     .volume-control {
@@ -256,7 +385,7 @@
     }
 
     .volume-control input[type="range"] {
-      width: 80px;
+      width: 70px;
       height: 2px;
       -webkit-appearance: none;
       appearance: none;
@@ -284,66 +413,39 @@
       border: none;
     }
 
-    /* ========== GRAVAÇÃO DA FONIA ========== */
-    .record-card {
+    /* ========== BOTÃO DE GRAVAÇÃO ========== */
+    .record-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--radar-border);
+      background: rgba(10, 10, 10, 0.45);
+      color: var(--radar-green);
+      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 10px 16px;
-      font-family: inherit;
-      font-size: 12px;
-      letter-spacing: 0.5px;
-      text-align: left;
-      cursor: pointer;
-      background: var(--radar-panel-bg);
-      border: 1px solid var(--radar-border);
-      border-radius: 4px;
-      color: var(--radar-text-dim);
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    .record-card:hover {
-      border-color: var(--radar-green);
-      color: var(--radar-green);
-    }
-
-    .record-card .material-icons {
-      font-size: 18px;
-      color: var(--radar-green);
+      justify-content: center;
       flex-shrink: 0;
+      transition: all 0.2s;
     }
 
-    .record-card .record-label {
-      flex: 1;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .record-card .record-label.warn {
-      color: var(--radar-green);
-      text-transform: none;
-    }
-
-    .record-card .record-counter {
-      display: none;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-weight: 600;
-      color: var(--radar-green);
-      letter-spacing: 0.5px;
-    }
-
-    .record-card.recording {
+    .record-btn:hover {
       border-color: var(--radar-green);
       background: var(--radar-green-faint);
-      color: var(--radar-green);
     }
 
-    .record-card.recording .record-counter {
-      display: inline-block;
+    .record-btn .material-icons {
+      font-size: 18px;
+      color: inherit;
     }
 
-    .record-card.recording .material-icons {
+    .record-btn.recording {
+      border-color: var(--radar-green);
+      background: var(--radar-green-faint);
+      box-shadow: 0 0 12px var(--radar-green-glow);
+    }
+
+    .record-btn.recording .material-icons {
       animation: recPulse 1.2s ease-in-out infinite;
     }
 
@@ -437,8 +539,18 @@
         padding: 16px;
       }
 
-      .record-card {
-        padding: 9px 14px;
+      .player-square {
+        max-width: 100%;
+        padding: 40px 0 70px;
+      }
+
+      .waveform {
+        height: 72px;
+      }
+
+      .play-btn {
+        width: 42px;
+        height: 42px;
       }
     }
 
@@ -502,6 +614,9 @@
     }
   </style>
 
+  <!-- Waveform do áudio ao vivo -->
+  <script src="/radio-waveform.js" defer></script>
+
   <!-- Botão de gravação da fonia (grava e baixa o MP3) -->
   <script src="/radio-recorder.js" defer></script>
 </head>
@@ -522,34 +637,47 @@
   </div>
 
   <main>
-    <!-- Player de Áudio -->
-    <div class="radar-card">
-      <div class="audio-panel">
+    <!-- Player de Áudio — quadrado, inspirado no app Android -->
+    <div class="player-square" id="playerSquare">
+      <img class="player-bg" src="/favicon/android-chrome-512x512.png" alt="" aria-hidden="true">
+      <div class="player-fade" aria-hidden="true"></div>
+
+      <div class="volume-control player-volume">
+        <button id="volumeButton" title="Mudo">
+          <span class="material-icons">volume_up</span>
+        </button>
+        <input type="range" id="volumeSlider" min="0" max="100" value="100" aria-label="Volume">
+      </div>
+
+      <!-- Meio: waveform do áudio ao vivo + estado -->
+      <div class="player-center">
+        <canvas id="waveformCanvas" class="waveform" aria-hidden="true"></canvas>
+        <div class="player-status">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="status-text" id="status">Disponível</span>
+        </div>
+        <div class="rec-status">
+          <span class="record-label" id="recordLabel"></span>
+          <span class="record-counter" id="recordCounter" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <!-- Rodapé: nome da fonia, gravar e play -->
+      <div class="player-bottom">
+        <span class="channel-name">FONIA ATC</span>
+        <button class="record-btn" id="recordBtn" type="button" title="Gravar fonia (MP3)"
+          data-label-idle="" data-label-recording="Gravando">
+          <span class="material-icons">fiber_manual_record</span>
+        </button>
         <button class="play-btn" id="playButton" title="Ouvir fonia ATC">
           <span class="material-icons">play_arrow</span>
         </button>
-        <div class="audio-info">
-          <div class="label">FONIA ATC</div>
-          <div class="status-text" id="status">Disponível</div>
-        </div>
-        <div class="volume-control">
-          <button id="volumeButton" title="Mudo">
-            <span class="material-icons">volume_up</span>
-          </button>
-          <input type="range" id="volumeSlider" min="0" max="100" value="100">
-        </div>
       </div>
-      <audio id="radioPlayer" preload="none" muted>
+
+      <audio id="radioPlayer" preload="none" muted crossorigin="anonymous">
         <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
       </audio>
     </div>
-
-    <!-- Gravação da fonia -->
-    <button class="radar-card record-card" id="recordBtn" type="button" title="Gravar fonia (MP3)">
-      <span class="material-icons">fiber_manual_record</span>
-      <span class="record-label" id="recordLabel">Gravar Fonia ATC</span>
-      <span class="record-counter" id="recordCounter" aria-live="polite"></span>
-    </button>
 
     <!-- Texto informativo -->
     <div class="radar-card">

@@ -12,12 +12,15 @@
 
    Independe do player: grava com o áudio tocando ou não.
 
-   Uso: a faixa precisa existir na página (veja index.html):
-     <button class="radar-card record-card" id="recordBtn" type="button">
+   Uso: o botão e os elementos de estado precisam existir na página (index.html):
+     <button class="record-btn" id="recordBtn" type="button"
+       data-label-idle="" data-label-recording="Gravando">
        <span class="material-icons">fiber_manual_record</span>
-       <span class="record-label" id="recordLabel">Gravar Fonia ATC</span>
-       <span class="record-counter" id="recordCounter"></span>
      </button>
+     ...
+       <span class="record-label" id="recordLabel"></span>
+       <span class="record-counter" id="recordCounter"></span>
+   Rótulos vazios em `data-label-idle` significam "não mostrar nada parado".
    e o script ser carregado:
      <script src="/radio-recorder.js" defer></script>
 
@@ -196,6 +199,11 @@
       log('sem #recordBtn na página: gravador não iniciado');
       return;
     }
+
+    // Rótulos vêm do HTML (data-label-*), com fallback
+    if (btn.dataset.labelIdle !== undefined) LABEL_IDLE = btn.dataset.labelIdle;
+    if (btn.dataset.labelRecording) LABEL_RECORDING = btn.dataset.labelRecording;
+
     btn.addEventListener('click', onButtonClick);
     setUi(false);
     log('gravador pronto');
