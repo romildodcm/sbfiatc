@@ -1,26 +1,22 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v4';
+const CACHE_NAME = 'sbfi-atc-v5';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
 const STATIC_RESOURCES = [
   '/',
   '/index.html',
-  '/map.html',
-  '/styles.css',
-  '/script.js',
   '/radio-analytics.js',
   '/radio-recorder.js',
-  '/sbfi/apple-touch-icon.png',
-  '/sbfi/favicon-32x32.png',
-  '/sbfi/favicon-16x16.png',
-  '/sbfi/site.webmanifest',
+  '/favicon/apple-touch-icon.png',
+  '/favicon/favicon-32x32.png',
+  '/favicon/favicon-16x16.png',
+  '/favicon/favicon.ico',
+  '/favicon/site.webmanifest',
 ];
 
 // CDNs estáticos que podem ser cacheados
 const CDN_CACHE_ORIGINS = [
-  'https://unpkg.com/',
-  'https://cdn.jsdelivr.net/',
   'https://fonts.googleapis.com/',
   'https://fonts.gstatic.com/',
 ];
@@ -28,7 +24,6 @@ const CDN_CACHE_ORIGINS = [
 // URLs que NUNCA devem ser cacheadas
 function isNoCacheUrl(url) {
   return url.includes('ic.io.tec.br') ||
-         url.includes('/aircraft') ||
          url.includes('googletagmanager.com') ||
          url.includes('google-analytics.com');
 }
