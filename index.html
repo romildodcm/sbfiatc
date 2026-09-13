@@ -163,15 +163,6 @@
       gap: 24px;
     }
 
-    /* ========== RADAR CARD ========== */
-    .radar-card {
-      background: var(--radar-panel-bg);
-      border: 1px solid var(--radar-border);
-      border-radius: 4px;
-      padding: 24px;
-      width: 100%;
-    }
-
     /* ========== PLAYER QUADRADO (inspirado no app Android) ========== */
     .player-square {
       position: relative;
@@ -391,25 +382,162 @@
       50% { opacity: 0.25; }
     }
 
-    /* ========== INFO CARD ========== */
-    .info-text {
-      font-size: 12px;
-      line-height: 1.8;
+    /* ========== BOTÃO DE INFORMAÇÕES ========== */
+    .info-btn {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      z-index: 2;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1px solid var(--radar-border);
+      background: rgba(10, 10, 10, 0.4);
+      color: var(--radar-green);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.2s;
+    }
+
+    .info-btn:hover {
+      border-color: var(--radar-green);
+      background: var(--radar-green-faint);
+    }
+
+    .info-btn .material-icons {
+      font-size: 17px;
+      color: var(--radar-green);
+    }
+
+    /* ========== DIÁLOGO SOBRE ========== */
+    .info-dialog {
+      width: min(92vw, 460px);
+      max-height: 82vh;
+      padding: 0;
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+      background: var(--radar-panel-bg);
       color: var(--radar-text-dim);
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12.5px;
+      line-height: 1.75;
+      box-shadow: 0 0 30px var(--radar-green-faint);
+      overflow: auto;
+    }
+
+    .info-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(2px);
+    }
+
+    .info-dialog[open] {
+      animation: infoIn 0.18s ease-out;
+    }
+
+    @keyframes infoIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .info-dialog-header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--radar-border);
+      background: var(--radar-panel-bg);
+    }
+
+    .info-dialog-header h2 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .info-dialog-close {
+      display: flex;
+      padding: 2px;
+      background: none;
+      border: none;
+      color: var(--radar-green);
+      cursor: pointer;
+    }
+
+    .info-dialog-close .material-icons {
+      font-size: 18px;
+    }
+
+    .info-dialog-body {
+      padding: 16px;
+    }
+
+    .info-dialog-body p {
+      margin-bottom: 12px;
       text-align: justify;
     }
 
-    .info-text p {
-      margin-bottom: 12px;
+    .info-dialog-body strong {
+      color: var(--radar-green);
+      font-weight: 700;
     }
 
-    .info-text p:last-child {
+    .info-dialog-body .english {
+      font-style: italic;
+      opacity: 0.7;
+      margin-bottom: 18px;
+    }
+
+    .info-dialog-meta {
+      margin-bottom: 10px;
+    }
+
+    .info-dialog-meta:last-child {
       margin-bottom: 0;
     }
 
-    .info-text .english {
-      font-style: italic;
-      opacity: 0.7;
+    .info-dialog-meta .info-label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    .info-dialog-meta a {
+      color: var(--radar-green);
+      text-decoration: none;
+    }
+
+    .info-dialog-meta a:hover {
+      text-decoration: underline;
+    }
+
+    .info-dialog-ok {
+      display: block;
+      width: calc(100% - 32px);
+      margin: 0 16px 16px;
+      padding: 10px;
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+      background: transparent;
+      border: 1px solid var(--radar-green);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .info-dialog-ok:hover {
+      background: var(--radar-green-faint);
     }
 
     /* ========== THEME TOGGLE ========== */
@@ -470,10 +598,6 @@
       main {
         padding: 16px 12px 80px;
         gap: 16px;
-      }
-
-      .radar-card {
-        padding: 16px;
       }
 
       .player-square {
@@ -579,6 +703,11 @@
       <img class="player-bg" src="/favicon/android-chrome-512x512.png" alt="" aria-hidden="true">
       <div class="player-fade" aria-hidden="true"></div>
 
+      <!-- Info: mesma posição do botão de informações do app Android -->
+      <button class="info-btn" id="infoBtn" type="button" title="Sobre" aria-label="Sobre">
+        <span class="material-icons">info_outline</span>
+      </button>
+
       <!-- Meio: waveform do áudio ao vivo + estado -->
       <div class="player-center">
         <canvas id="waveformCanvas" class="waveform" aria-hidden="true"></canvas>
@@ -609,19 +738,39 @@
       </audio>
     </div>
 
-    <!-- Texto informativo -->
-    <div class="radar-card">
-      <div class="info-text">
-        <p><strong style="color:var(--radar-green)">Ouça ao vivo o controle de tráfego aéreo</strong> na região de
-          IGU/SBFI, AGT/SGES e IGR/SARI. Transmissão online da fonia na região de IGU/SBFI, por ser uma região
-          trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos
-          AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
-        <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national
-          area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES
-          and IGR/SARI airports and their respective ACCs.</p>
+  </main>
+
+  <!-- Sobre: as informações que antes ficavam no card da página agora vivem
+       aqui, atrás do botão de info — o texto continua no HTML -->
+  <dialog class="info-dialog" id="infoDialog" aria-labelledby="infoDialogTitle">
+    <div class="info-dialog-header">
+      <h2 id="infoDialogTitle">Sobre</h2>
+      <button class="info-dialog-close" id="infoCloseBtn" type="button" aria-label="Fechar">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+
+    <div class="info-dialog-body">
+      <p><strong>Ouça ao vivo o controle de tráfego aéreo</strong> na região de
+        IGU/SBFI, AGT/SGES e IGR/SARI. Transmissão online da fonia na região de IGU/SBFI, por ser uma região
+        trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos
+        AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
+      <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national
+        area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES
+        and IGR/SARI airports and their respective ACCs.</p>
+
+      <div class="info-dialog-meta">
+        <span class="info-label">Site</span>
+        <a href="https://atc.iguspotters.com.br/" target="_blank" rel="noopener">atc.iguspotters.com.br</a>
+      </div>
+      <div class="info-dialog-meta">
+        <span class="info-label">Desenvolvedor</span>
+        <a href="https://romildo.net/" target="_blank" rel="noopener">romildo.net</a>
       </div>
     </div>
-  </main>
+
+    <button class="info-dialog-ok" id="infoOkBtn" type="button">Fechar</button>
+  </dialog>
 
   <footer>
     <p>Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
@@ -909,6 +1058,34 @@
       installBanner.classList.remove('visible');
       deferredPrompt = null;
     });
+  </script>
+
+  <!-- Sobre: abre e fecha o diálogo de informações -->
+  <script>
+    (function () {
+      const dialog = document.getElementById('infoDialog');
+      const openBtn = document.getElementById('infoBtn');
+      if (!dialog || !openBtn) return;
+
+      function close() {
+        if (dialog.open) dialog.close();
+      }
+
+      openBtn.addEventListener('click', function () {
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.setAttribute('open', '');   // navegadores muito antigos
+      });
+
+      ['infoCloseBtn', 'infoOkBtn'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', close);
+      });
+
+      // Clicar no fundo escurecido (fora do painel) também fecha
+      dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) close();
+      });
+    })();
   </script>
 
   <!-- Métricas do player (GA4): play, tempo de escuta, buffering, erros -->
