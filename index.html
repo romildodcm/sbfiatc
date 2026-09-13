@@ -190,6 +190,12 @@
       object-fit: cover;
       opacity: 0.22;
       pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    /* No modo noturno (vermelho) o fundo fica preto, sem o ícone */
+    [data-theme="red"] .player-bg {
+      opacity: 0;
     }
 
     /* Fade sobre a imagem (equivalente ao fade_overlay do Android) */
@@ -385,30 +391,41 @@
     /* ========== BOTÃO DE INFORMAÇÕES ========== */
     .info-btn {
       position: absolute;
-      top: 10px;
-      right: 12px;
+      top: 6px;
+      right: 8px;
       z-index: 2;
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      border: 1px solid var(--radar-border);
-      background: rgba(10, 10, 10, 0.4);
-      color: var(--radar-green);
-      cursor: pointer;
+      /* sem moldura: só o ícone, com um alvo de toque confortável */
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 36px;
+      height: 36px;
       padding: 0;
-      transition: all 0.2s;
+      border: none;
+      background: none;
+      color: var(--radar-green);
+      opacity: 0.8;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
     }
 
     .info-btn:hover {
-      border-color: var(--radar-green);
-      background: var(--radar-green-faint);
+      opacity: 1;
+    }
+
+    .info-btn:active {
+      transform: scale(0.92);
+    }
+
+    .info-btn:focus-visible {
+      outline: 1px solid var(--radar-green);
+      outline-offset: -4px;
+      border-radius: 4px;
+      opacity: 1;
     }
 
     .info-btn .material-icons {
-      font-size: 17px;
+      font-size: 24px;
       color: var(--radar-green);
     }
 
