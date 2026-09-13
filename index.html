@@ -417,6 +417,9 @@
       width: min(92vw, 460px);
       max-height: 82vh;
       padding: 0;
+      /* o reset global (* { margin: 0 }) apaga o margin: auto com que o
+         navegador centraliza um <dialog> modal, entao devolvemos aqui */
+      margin: auto;
       border: 1px solid var(--radar-border);
       border-radius: 4px;
       background: var(--radar-panel-bg);
