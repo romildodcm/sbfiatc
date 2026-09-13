@@ -175,7 +175,8 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      /* Sem overflow: hidden para o tooltip da gravação poder abrir para baixo.
+         O recorte do fundo é feito pelo border-radius nas próprias camadas. */
       background: var(--radar-panel-bg);
       border: 1px solid var(--radar-border);
       border-radius: 4px;
@@ -190,6 +191,7 @@
       object-fit: cover;
       opacity: 0.22;
       pointer-events: none;
+      border-radius: inherit;
       transition: opacity 0.25s ease;
     }
 
@@ -203,6 +205,7 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
+      border-radius: inherit;
       background:
         radial-gradient(circle at 50% 42%, rgba(10, 10, 10, 0) 0%, rgba(10, 10, 10, 0.72) 72%),
         linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(10, 10, 10, 0.15) 45%, rgba(10, 10, 10, 0.9) 100%);
@@ -349,6 +352,7 @@
 
     /* ========== BOTÃO DE GRAVAÇÃO ========== */
     .record-btn {
+      position: relative;   /* âncora do tooltip */
       width: 36px;
       height: 36px;
       border-radius: 50%;
@@ -386,6 +390,56 @@
     @keyframes recPulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.25; }
+    }
+
+    /* Tooltip do botão de gravar: explica que a gravação volta no tempo.
+       Aparece no hover (mouse) e no foco (teclado) — no toque quem avisa é a
+       própria faixa, que mostra "Inclui X anteriores" ao iniciar. */
+    .record-tip {
+      position: absolute;
+      top: calc(100% + 14px);
+      right: -8px;
+      z-index: 5;
+      width: 208px;
+      padding: 10px 12px;
+      border: 1px solid var(--radar-green);
+      border-radius: 4px;
+      background: rgba(10, 10, 10, 0.96);
+      box-shadow: 0 0 18px var(--radar-green-glow);
+      color: var(--radar-text-dim);
+      font-size: 11px;
+      line-height: 1.55;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: left;
+      text-transform: none;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+      pointer-events: none;
+    }
+
+    .record-tip strong {
+      color: var(--radar-green);
+      font-weight: 700;
+    }
+
+    /* Setinha apontando para o botão (que fica acima do balão) */
+    .record-tip::after {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      right: 20px;
+      border: 6px solid transparent;
+      border-bottom-color: var(--radar-green);
+    }
+
+    .record-btn:hover .record-tip,
+    .record-btn:focus-visible .record-tip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
     }
 
     /* ========== BOTÃO DE INFORMAÇÕES ========== */
@@ -596,7 +650,7 @@
       }
 
       main {
-        padding: 16px 12px 80px;
+        padding: 24px 22px 80px;
         gap: 16px;
       }
 
@@ -723,10 +777,15 @@
 
       <!-- Rodapé: nome da fonia, gravar e play -->
       <div class="player-bottom">
-        <span class="channel-name">IGU/FONIA Area</span>
-        <button class="record-btn" id="recordBtn" type="button" title="Gravar fonia (MP3)"
+        <span class="channel-name">IGU/SBFI Area</span>
+        <button class="record-btn" id="recordBtn" type="button"
+          aria-describedby="recordTip"
           data-label-idle="" data-label-recording="Gravando">
           <span class="material-icons">fiber_manual_record</span>
+          <span class="record-tip" id="recordTip" role="tooltip">
+            Grava a fonia ao vivo em MP3. Se você já está ouvindo, os últimos
+            <strong>2 minutos</strong> entram no arquivo.
+          </span>
         </button>
         <button class="play-btn" id="playButton" title="Ouvir fonia ATC">
           <span class="material-icons">play_arrow</span>
