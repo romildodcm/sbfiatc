@@ -18,6 +18,9 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
   <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
   <link rel="manifest" href="/favicon/site.webmanifest">
+  <!-- Ícone que fica ao fundo do player: começa a baixar junto com o HTML,
+       em vez de esperar o navegador chegar no <img> lá no fim da página -->
+  <link rel="preload" as="image" href="/favicon/android-chrome-512x512.png">
 
   <!-- SEO básico -->
   <link rel="canonical" href="https://atc.iguspotters.com.br/">
@@ -347,72 +350,6 @@
       color: var(--radar-green);
     }
 
-    /* Volume no topo direito (mesma posição do botão de info do Android) */
-    .player-volume {
-      position: absolute;
-      top: 10px;
-      right: 12px;
-      z-index: 2;
-      padding: 2px 8px;
-      border: 1px solid var(--radar-border);
-      border-radius: 4px;
-      background: rgba(10, 10, 10, 0.4);
-    }
-
-    .volume-control {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .volume-control button {
-      background: none;
-      border: none;
-      color: var(--radar-text-dim);
-      cursor: pointer;
-      padding: 4px;
-      display: flex;
-      align-items: center;
-    }
-
-    .volume-control button:hover {
-      color: var(--radar-green);
-    }
-
-    .volume-control button .material-icons {
-      font-size: 20px;
-      color: inherit;
-    }
-
-    .volume-control input[type="range"] {
-      width: 70px;
-      height: 2px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: var(--radar-border);
-      outline: none;
-      border-radius: 1px;
-    }
-
-    .volume-control input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--radar-green);
-      cursor: pointer;
-    }
-
-    .volume-control input[type="range"]::-moz-range-thumb {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--radar-green);
-      cursor: pointer;
-      border: none;
-    }
-
     /* ========== BOTÃO DE GRAVAÇÃO ========== */
     .record-btn {
       width: 36px;
@@ -642,13 +579,6 @@
       <img class="player-bg" src="/favicon/android-chrome-512x512.png" alt="" aria-hidden="true">
       <div class="player-fade" aria-hidden="true"></div>
 
-      <div class="volume-control player-volume">
-        <button id="volumeButton" title="Mudo">
-          <span class="material-icons">volume_up</span>
-        </button>
-        <input type="range" id="volumeSlider" min="0" max="100" value="100" aria-label="Volume">
-      </div>
-
       <!-- Meio: waveform do áudio ao vivo + estado -->
       <div class="player-center">
         <canvas id="waveformCanvas" class="waveform" aria-hidden="true"></canvas>
@@ -717,12 +647,8 @@
       const player = document.getElementById('radioPlayer');
       const statusEl = document.getElementById('status');
       const playButton = document.getElementById('playButton');
-      const volumeButton = document.getElementById('volumeButton');
-      const volumeSlider = document.getElementById('volumeSlider');
 
       let isPlaying = false;
-      let isMuted = false;
-      let previousVolume = 1.0;
       const streamUrl = 'https://ic.io.tec.br/sbfi';
 
       function getStreamUrl() {
@@ -817,13 +743,6 @@
         playButton.classList.toggle('playing', isPlaying);
       }
 
-      function updateVolumeIcon() {
-        const icon = volumeButton.querySelector('.material-icons');
-        if (isMuted || player.volume === 0) icon.textContent = 'volume_off';
-        else if (player.volume < 0.5) icon.textContent = 'volume_down';
-        else icon.textContent = 'volume_up';
-      }
-
       player.setAttribute('preload', 'none');
 
       // Reconexão: uma por vez, com backoff (3s -> 6s -> 12s -> 24s -> 30s)
@@ -859,29 +778,6 @@
         } else {
           player.pause();
         }
-      });
-
-      // Volume
-      volumeButton.addEventListener('click', function () {
-        if (isMuted) {
-          player.volume = previousVolume;
-          volumeSlider.value = previousVolume * 100;
-          isMuted = false;
-        } else {
-          previousVolume = player.volume;
-          player.volume = 0;
-          volumeSlider.value = 0;
-          isMuted = true;
-        }
-        updateVolumeIcon();
-      });
-
-      volumeSlider.addEventListener('input', function () {
-        const v = this.value / 100;
-        player.volume = v;
-        isMuted = v === 0;
-        if (v > 0) previousVolume = v;
-        updateVolumeIcon();
       });
 
       // Player events
@@ -931,8 +827,6 @@
         setStatus('Transmissão finalizada');
       });
 
-      player.addEventListener('volumechange', updateVolumeIcon);
-
       // Reconectar ao voltar online
       window.addEventListener('online', () => {
         if (isPlaying) reconnectStream('online');
@@ -949,9 +843,9 @@
         }
       }, 5000);
 
+      // Sem controle de volume na página: o som sai em volume cheio e o
+      // ajuste fica por conta do aparelho (igual ao app Android)
       player.volume = 1.0;
-      volumeSlider.value = 100;
-      updateVolumeIcon();
     });
 
     // ==========================================

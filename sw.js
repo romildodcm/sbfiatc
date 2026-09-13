@@ -1,5 +1,5 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v6';
+const CACHE_NAME = 'sbfi-atc-v7';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
@@ -9,6 +9,7 @@ const STATIC_RESOURCES = [
   '/radio-analytics.js',
   '/radio-recorder.js',
   '/radio-waveform.js',
+  '/favicon/android-chrome-512x512.png',
   '/favicon/apple-touch-icon.png',
   '/favicon/favicon-32x32.png',
   '/favicon/favicon-16x16.png',
