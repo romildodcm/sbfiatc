@@ -1894,18 +1894,99 @@
         return `${streamUrl}?t=${Date.now()}&r=${Math.random().toString(36).substring(7)}`;
       }
 
+      // --- Estabilidade do player (fonia ao vivo) --------------------------
+      // A folga de buffer É o atraso em relação ao ao vivo: 2,5s absorve o
+      // jitter da rede mantendo o áudio contínuo.
+      const CUSHION_S = 2.5;
+      const JOIN_REALIGN_OVER_S = 4;    // só realinha na entrada se o buffer vier maior que isso
+      const MAX_DRIFT_S = 20;           // atraso absurdo (pós-reconexão) -> 1 realinhamento
+      const DRIFT_COOLDOWN_MS = 120000;
+      const WAITING_DEBOUNCE_MS = 1500; // espera para mostrar "Aguardando dados..."
+      const LIVE_CONFIRM_MS = 1000;     // tempo tocando para confirmar "AO VIVO"
+      const BACKOFF_START_MS = 3000;
+      const BACKOFF_MAX_MS = 30000;
+      const STALL_RELOAD_MS = 15000;    // só recarrega após isso sem progresso
+
+      let waitingTimer = null;
+      let liveTimer = null;
+      let alignedThisConnection = false;
+      let lastDriftFixAt = 0;
+      let lastProgressAt = Date.now();
+
+      function setStatus(text, live) {
+        statusText.textContent = text;
+        statusText.classList.toggle('live', !!live);
+      }
+
+      function reloadStream() {
+        const source = player.querySelector('source');
+        source.src = getStreamUrl();
+        player.load();
+        alignedThisConnection = false;
+      }
+
+      // Status sem piscar: só avisa se o problema persistir e só confirma
+      // "AO VIVO" depois de um tempo estável.
+      function scheduleWaiting() {
+        clearTimeout(liveTimer);
+        liveTimer = null;
+        if (waitingTimer) return;
+        waitingTimer = setTimeout(() => {
+          waitingTimer = null;
+          if (!player.paused) setStatus('Aguardando dados...');
+        }, WAITING_DEBOUNCE_MS);
+      }
+
+      function confirmLive() {
+        clearTimeout(waitingTimer);
+        waitingTimer = null;
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => {
+          liveTimer = null;
+          if (isPlaying && !player.paused) {
+            reconnectAttempts = 0;   // tocou de verdade: zera o backoff
+            setStatus('● AO VIVO', true);
+          }
+        }, LIVE_CONFIRM_MS);
+      }
+
+      // Alinhamento único: posiciona o playhead deixando CUSHION_S de folga.
+      // Depois disso o currentTime NÃO é mais tocado durante a reprodução.
+      function alignToLiveEdge(force) {
+        if (!force && alignedThisConnection) return;
+        try {
+          if (!player.buffered.length) return;
+          const end = player.buffered.end(player.buffered.length - 1);
+          if (end - player.currentTime <= JOIN_REALIGN_OVER_S) return;
+          player.currentTime = Math.max(0, end - CUSHION_S);
+          alignedThisConnection = true;
+        } catch (e) { }
+      }
+
+      // Rede de segurança: só age em atraso anormal, no máximo 1x a cada 2 min.
+      function fixHugeDrift() {
+        if (!isPlaying || player.paused) return;
+        if (Date.now() - lastDriftFixAt < DRIFT_COOLDOWN_MS) return;
+        try {
+          if (!player.buffered.length) return;
+          const end = player.buffered.end(player.buffered.length - 1);
+          if (end - player.currentTime > MAX_DRIFT_S) {
+            player.currentTime = end - CUSHION_S;
+            lastDriftFixAt = Date.now();
+          }
+        } catch (e) { }
+      }
+
       playBtn.addEventListener('click', () => {
         if (player.paused) {
-          const source = player.querySelector('source');
-          source.src = getStreamUrl();
-          player.load();
-          statusText.textContent = 'Conectando...';
-          statusText.classList.remove('live');
+          clearTimeout(waitingTimer);
+          clearTimeout(liveTimer);
+          reloadStream();
+          setStatus('Conectando...');
 
           setTimeout(() => {
             player.play().catch(() => {
-              statusText.textContent = 'Falha na conexão';
-              statusText.classList.remove('live');
+              setStatus('Falha na conexão');
             });
           }, 100);
         } else {
@@ -1917,8 +1998,7 @@
         isPlaying = true;
         playBtn.querySelector('.material-icons').textContent = 'pause';
         playBtn.classList.add('playing');
-        statusText.textContent = '● AO VIVO';
-        statusText.classList.add('live');
+        confirmLive();
         if (player.muted) player.muted = false;
       });
 
@@ -1926,8 +2006,9 @@
         isPlaying = false;
         playBtn.querySelector('.material-icons').textContent = 'play_arrow';
         playBtn.classList.remove('playing');
-        statusText.textContent = 'Disponível';
-        statusText.classList.remove('live');
+        clearTimeout(waitingTimer);
+        clearTimeout(liveTimer);
+        setStatus('Disponível');
       });
 
       volBtn.addEventListener('click', () => {
@@ -1954,54 +2035,30 @@
           v === 0 ? 'volume_off' : v < 0.5 ? 'volume_down' : 'volume_up';
       });
 
-      // Se o player der erro, tenta reconectar
+      // Se o player der erro, tenta reconectar (uma por vez, com backoff)
       let reconnectTimeout = null;
-      function reconnectStream() {
+      let reconnectAttempts = 0;
+
+      function reconnectStream(trigger) {
         if (!isPlaying || reconnectTimeout) return;
-        statusText.textContent = 'Reconectando...';
-        statusText.classList.remove('live');
+        reconnectAttempts += 1;
+        const delay = Math.min(BACKOFF_START_MS * Math.pow(2, reconnectAttempts - 1), BACKOFF_MAX_MS);
+        setStatus('Reconectando...');
         reconnectTimeout = setTimeout(() => {
           reconnectTimeout = null;
-          const source = player.querySelector('source');
-          source.src = getStreamUrl();
-          player.load();
-          player.play().catch(() => {
-            setTimeout(() => reconnectStream(), 5000);
-          });
-        }, 3000);
+          reloadStream();
+          player.play().catch(() => reconnectStream('play-falhou'));
+        }, delay);
       }
 
-      function configLowLatency() {
-        player.setAttribute('preload', 'none');
-        try {
-          if (player.buffered && player.buffered.length > 0) {
-            player.currentTime = player.buffered.end(player.buffered.length - 1);
-          }
-        } catch (e) { }
-      }
+      player.setAttribute('preload', 'none');
 
-      configLowLatency();
-      player.addEventListener('loadeddata', configLowLatency);
+      player.addEventListener('error', () => reconnectStream('error'));
 
-      player.addEventListener('error', reconnectStream);
-      player.addEventListener('stalled', () => {
-        if (isPlaying) {
-          statusText.textContent = 'Buffering...';
-          statusText.classList.remove('live');
-          setTimeout(() => {
-            if (isPlaying && !player.paused && statusText.textContent === 'Buffering...') {
-              reconnectStream();
-            }
-          }, 5000);
-        }
-      });
-
-      player.addEventListener('waiting', () => {
-        if (isPlaying) {
-          statusText.textContent = 'Aguardando dados...';
-          statusText.classList.remove('live');
-        }
-      });
+      // "waiting"/"stalled" só avisam se a espera persistir — e não
+      // recarregam o stream, que na maioria das vezes recupera sozinho.
+      player.addEventListener('stalled', scheduleWaiting);
+      player.addEventListener('waiting', scheduleWaiting);
 
       // Reconectar ao voltar online
       window.addEventListener('online', () => {
@@ -2009,33 +2066,31 @@
         fetchADSBData();
       });
 
-      // Buffer management
+      // Alinhamento único na entrada + confirmação de "AO VIVO" sem piscar
       player.addEventListener('canplay', () => {
-        if (!player.paused) {
-          statusText.textContent = '● AO VIVO';
-          statusText.classList.add('live');
-          try {
-            if (player.buffered.length > 0) {
-              const bufferSize = player.buffered.end(player.buffered.length - 1) - player.buffered.start(0);
-              if (bufferSize > 2) {
-                player.currentTime = player.buffered.end(player.buffered.length - 1) - 0.5;
-              }
-            }
-          } catch (e) { }
-        }
+        alignToLiveEdge(false);
+        if (!player.paused) confirmLive();
       });
 
-      // Monitor periódico — reduz latência
+      player.addEventListener('playing', () => {
+        lastProgressAt = Date.now();
+        confirmLive();
+      });
+
+      player.addEventListener('timeupdate', () => {
+        lastProgressAt = Date.now();
+      });
+
+      // Monitor passivo: não altera o áudio no funcionamento normal.
+      // Age só em travamento real (sem progresso) ou atraso anormal.
       setInterval(() => {
-        if (isPlaying && !player.paused) {
-          try {
-            if (player.buffered.length > 0) {
-              const bh = player.buffered.end(player.buffered.length - 1) - player.currentTime;
-              if (bh > 3) player.currentTime = player.buffered.end(player.buffered.length - 1) - 0.5;
-            }
-          } catch (e) { }
+        fixHugeDrift();
+        if (!isPlaying || player.paused) return;
+        if (Date.now() - lastProgressAt > STALL_RELOAD_MS) {
+          lastProgressAt = Date.now();   // evita disparo duplo durante a reconexão
+          reconnectStream('sem-progresso');
         }
-      }, 3000);
+      }, 5000);
 
       player.volume = 1.0;
     }
