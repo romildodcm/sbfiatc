@@ -18,6 +18,9 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
   <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
   <link rel="manifest" href="/favicon/site.webmanifest">
+  <!-- Ícone que fica ao fundo do player: começa a baixar junto com o HTML,
+       em vez de esperar o navegador chegar no <img> lá no fim da página -->
+  <link rel="preload" as="image" href="/favicon/android-chrome-512x512.png">
 
   <!-- SEO básico -->
   <link rel="canonical" href="https://atc.iguspotters.com.br/">
@@ -160,28 +163,170 @@
       gap: 24px;
     }
 
-    /* ========== RADAR CARD ========== */
-    .radar-card {
+    /* ========== PLAYER QUADRADO (inspirado no app Android) ========== */
+    .player-square {
+      position: relative;
+      width: 100%;
+      max-width: 340px;
+      margin: 0 auto;
+      aspect-ratio: 1 / 1;
+      padding: 48px 0 76px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
       background: var(--radar-panel-bg);
       border: 1px solid var(--radar-border);
       border-radius: 4px;
-      padding: 24px;
-      width: 100%;
     }
 
-    /* ========== PLAYER ========== */
-    .audio-panel {
+    /* Ícone do site ao fundo — como o card do app Android */
+    .player-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.22;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    /* No modo noturno (vermelho) o fundo fica preto, sem o ícone */
+    [data-theme="red"] .player-bg {
+      opacity: 0;
+    }
+
+    /* Fade sobre a imagem (equivalente ao fade_overlay do Android) */
+    .player-fade {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(10, 10, 10, 0) 0%, rgba(10, 10, 10, 0.72) 72%),
+        linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(10, 10, 10, 0.15) 45%, rgba(10, 10, 10, 0.9) 100%);
+    }
+
+    /* Meio do quadrado: waveform + estado */
+    .player-center {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .waveform {
+      display: block;
+      width: 100%;
+      height: 84px;
+    }
+
+    .player-status {
       display: flex;
       align-items: center;
-      gap: 14px;
+      justify-content: center;
+      gap: 6px;
+      min-height: 18px;
+      margin-top: 12px;
     }
 
-    .audio-panel .play-btn {
-      width: 44px;
-      height: 44px;
+    .player-status .status-text {
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .player-status .status-text.live {
+      animation: pulse-text 2s infinite;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--radar-green);
+      box-shadow: 0 0 6px var(--radar-green-glow);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .player-square.playing .live-dot,
+    .player-square:has(.play-btn.playing) .live-dot {
+      opacity: 1;
+      animation: pulse-text 1.4s infinite;
+    }
+
+    @keyframes pulse-text {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Linha do REC — só aparece gravando; altura reservada p/ não deslocar */
+    .rec-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 16px;
+      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .rec-status .record-label:empty,
+    .rec-status .record-counter:empty {
+      display: none;
+    }
+
+    .rec-status .record-counter {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .rec-status .record-label.warn {
+      color: var(--radar-green);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      text-transform: none;
+    }
+
+    /* Rodapé do quadrado: nome da fonia, gravar, play */
+    .player-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+    }
+
+    .player-bottom .channel-name {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+      text-shadow: 0 0 8px var(--radar-green-glow);
+    }
+
+    .play-btn {
+      width: 46px;
+      height: 46px;
       border-radius: 50%;
       border: 2px solid var(--radar-green);
-      background: transparent;
+      background: rgba(10, 10, 10, 0.45);
       color: var(--radar-green);
       cursor: pointer;
       display: flex;
@@ -191,159 +336,50 @@
       transition: all 0.2s;
     }
 
-    .audio-panel .play-btn:hover {
+    .play-btn:hover,
+    .play-btn.playing {
       background: var(--radar-green-faint);
+      box-shadow: 0 0 12px var(--radar-green-glow);
     }
 
-    .audio-panel .play-btn.playing {
-      background: var(--radar-green-faint);
-    }
-
-    .audio-panel .play-btn .material-icons {
-      font-size: 22px;
+    .play-btn .material-icons {
+      font-size: 24px;
       color: var(--radar-green);
     }
 
-    .audio-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .audio-info .label {
-      font-size: 12px;
-      color: var(--radar-text-dim);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .audio-info .status-text {
-      font-size: 14px;
+    /* ========== BOTÃO DE GRAVAÇÃO ========== */
+    .record-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--radar-border);
+      background: rgba(10, 10, 10, 0.45);
       color: var(--radar-green);
-    }
-
-    .audio-info .status-text.live {
-      animation: pulse-text 2s infinite;
-    }
-
-    @keyframes pulse-text {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .volume-control {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .volume-control button {
-      background: none;
-      border: none;
-      color: var(--radar-text-dim);
       cursor: pointer;
-      padding: 4px;
       display: flex;
       align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
     }
 
-    .volume-control button:hover {
-      color: var(--radar-green);
+    .record-btn:hover {
+      border-color: var(--radar-green);
+      background: var(--radar-green-faint);
     }
 
-    .volume-control button .material-icons {
-      font-size: 20px;
+    .record-btn .material-icons {
+      font-size: 18px;
       color: inherit;
     }
 
-    .volume-control input[type="range"] {
-      width: 80px;
-      height: 2px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: var(--radar-border);
-      outline: none;
-      border-radius: 1px;
-    }
-
-    .volume-control input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--radar-green);
-      cursor: pointer;
-    }
-
-    .volume-control input[type="range"]::-moz-range-thumb {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--radar-green);
-      cursor: pointer;
-      border: none;
-    }
-
-    /* ========== GRAVAÇÃO DA FONIA ========== */
-    .record-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 10px 16px;
-      font-family: inherit;
-      font-size: 12px;
-      letter-spacing: 0.5px;
-      text-align: left;
-      cursor: pointer;
-      background: var(--radar-panel-bg);
-      border: 1px solid var(--radar-border);
-      border-radius: 4px;
-      color: var(--radar-text-dim);
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    .record-card:hover {
-      border-color: var(--radar-green);
-      color: var(--radar-green);
-    }
-
-    .record-card .material-icons {
-      font-size: 18px;
-      color: var(--radar-green);
-      flex-shrink: 0;
-    }
-
-    .record-card .record-label {
-      flex: 1;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .record-card .record-label.warn {
-      color: var(--radar-green);
-      text-transform: none;
-    }
-
-    .record-card .record-counter {
-      display: none;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-weight: 600;
-      color: var(--radar-green);
-      letter-spacing: 0.5px;
-    }
-
-    .record-card.recording {
+    .record-btn.recording {
       border-color: var(--radar-green);
       background: var(--radar-green-faint);
-      color: var(--radar-green);
+      box-shadow: 0 0 12px var(--radar-green-glow);
     }
 
-    .record-card.recording .record-counter {
-      display: inline-block;
-    }
-
-    .record-card.recording .material-icons {
+    .record-btn.recording .material-icons {
       animation: recPulse 1.2s ease-in-out infinite;
     }
 
@@ -352,25 +388,156 @@
       50% { opacity: 0.25; }
     }
 
-    /* ========== INFO CARD ========== */
-    .info-text {
-      font-size: 12px;
-      line-height: 1.8;
+    /* ========== BOTÃO DE INFORMAÇÕES ========== */
+    .info-btn {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      z-index: 2;
+      /* sem moldura: só o ícone, com um alvo de toque confortável */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--radar-green);
+      opacity: 0.8;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .info-btn:hover {
+      opacity: 1;
+    }
+
+    .info-btn:active {
+      transform: scale(0.92);
+    }
+
+    .info-btn:focus-visible {
+      outline: 1px solid var(--radar-green);
+      outline-offset: -4px;
+      border-radius: 4px;
+      opacity: 1;
+    }
+
+    .info-btn .material-icons {
+      font-size: 20px;
+      color: var(--radar-green);
+    }
+
+    /* ========== DIÁLOGO SOBRE ========== */
+    .info-dialog {
+      width: min(92vw, 460px);
+      max-height: 82vh;
+      padding: 0;
+      /* o reset global (* { margin: 0 }) apaga o margin: auto com que o
+         navegador centraliza um <dialog> modal, entao devolvemos aqui */
+      margin: auto;
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+      background: var(--radar-panel-bg);
       color: var(--radar-text-dim);
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12.5px;
+      line-height: 1.75;
+      box-shadow: 0 0 30px var(--radar-green-faint);
+      overflow: auto;
+    }
+
+    .info-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(2px);
+    }
+
+    .info-dialog[open] {
+      animation: infoIn 0.18s ease-out;
+    }
+
+    @keyframes infoIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .info-dialog-header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--radar-border);
+      background: var(--radar-panel-bg);
+    }
+
+    .info-dialog-header h2 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .info-dialog-close {
+      display: flex;
+      padding: 2px;
+      background: none;
+      border: none;
+      color: var(--radar-green);
+      cursor: pointer;
+    }
+
+    .info-dialog-close .material-icons {
+      font-size: 18px;
+    }
+
+    .info-dialog-body {
+      padding: 16px;
+    }
+
+    .info-dialog-body p {
+      margin-bottom: 12px;
       text-align: justify;
     }
 
-    .info-text p {
-      margin-bottom: 12px;
+    .info-dialog-body strong {
+      color: var(--radar-green);
+      font-weight: 700;
     }
 
-    .info-text p:last-child {
+    .info-dialog-body .english {
+      font-style: italic;
+      opacity: 0.7;
+      margin-bottom: 18px;
+    }
+
+    .info-dialog-meta {
+      margin-bottom: 10px;
+    }
+
+    .info-dialog-meta:last-child {
       margin-bottom: 0;
     }
 
-    .info-text .english {
-      font-style: italic;
-      opacity: 0.7;
+    .info-dialog-meta .info-label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    .info-dialog-meta a {
+      color: var(--radar-green);
+      text-decoration: none;
+    }
+
+    .info-dialog-meta a:hover {
+      text-decoration: underline;
     }
 
     /* ========== THEME TOGGLE ========== */
@@ -433,12 +600,18 @@
         gap: 16px;
       }
 
-      .radar-card {
-        padding: 16px;
+      .player-square {
+        max-width: 100%;
+        padding: 40px 0 70px;
       }
 
-      .record-card {
-        padding: 9px 14px;
+      .waveform {
+        height: 72px;
+      }
+
+      .play-btn {
+        width: 42px;
+        height: 42px;
       }
     }
 
@@ -502,6 +675,9 @@
     }
   </style>
 
+  <!-- Waveform do áudio ao vivo -->
+  <script src="/radio-waveform.js" defer></script>
+
   <!-- Botão de gravação da fonia (grava e baixa o MP3) -->
   <script src="/radio-recorder.js" defer></script>
 </head>
@@ -518,52 +694,82 @@
 <body>
   <!-- HEADER -->
   <div class="radar-header">
-    <h1>SBFI ATC</h1>
+    <h1>SBFI Area ATC</h1>
   </div>
 
   <main>
-    <!-- Player de Áudio -->
-    <div class="radar-card">
-      <div class="audio-panel">
+    <!-- Player de Áudio — quadrado, inspirado no app Android -->
+    <div class="player-square" id="playerSquare">
+      <img class="player-bg" src="/favicon/android-chrome-512x512.png" alt="" aria-hidden="true">
+      <div class="player-fade" aria-hidden="true"></div>
+
+      <!-- Info: mesma posição do botão de informações do app Android -->
+      <button class="info-btn" id="infoBtn" type="button" title="Sobre" aria-label="Sobre">
+        <span class="material-icons">info_outline</span>
+      </button>
+
+      <!-- Meio: waveform do áudio ao vivo + estado -->
+      <div class="player-center">
+        <canvas id="waveformCanvas" class="waveform" aria-hidden="true"></canvas>
+        <div class="player-status">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="status-text" id="status">Disponível</span>
+        </div>
+        <div class="rec-status">
+          <span class="record-label" id="recordLabel"></span>
+          <span class="record-counter" id="recordCounter" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <!-- Rodapé: nome da fonia, gravar e play -->
+      <div class="player-bottom">
+        <span class="channel-name">IGU/FONIA Area</span>
+        <button class="record-btn" id="recordBtn" type="button" title="Gravar fonia (MP3)"
+          data-label-idle="" data-label-recording="Gravando">
+          <span class="material-icons">fiber_manual_record</span>
+        </button>
         <button class="play-btn" id="playButton" title="Ouvir fonia ATC">
           <span class="material-icons">play_arrow</span>
         </button>
-        <div class="audio-info">
-          <div class="label">FONIA ATC</div>
-          <div class="status-text" id="status">Disponível</div>
-        </div>
-        <div class="volume-control">
-          <button id="volumeButton" title="Mudo">
-            <span class="material-icons">volume_up</span>
-          </button>
-          <input type="range" id="volumeSlider" min="0" max="100" value="100">
-        </div>
       </div>
-      <audio id="radioPlayer" preload="none" muted>
+
+      <audio id="radioPlayer" preload="none" muted crossorigin="anonymous">
         <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
       </audio>
     </div>
 
-    <!-- Gravação da fonia -->
-    <button class="radar-card record-card" id="recordBtn" type="button" title="Gravar fonia (MP3)">
-      <span class="material-icons">fiber_manual_record</span>
-      <span class="record-label" id="recordLabel">Gravar Fonia ATC</span>
-      <span class="record-counter" id="recordCounter" aria-live="polite"></span>
-    </button>
+  </main>
 
-    <!-- Texto informativo -->
-    <div class="radar-card">
-      <div class="info-text">
-        <p><strong style="color:var(--radar-green)">Ouça ao vivo o controle de tráfego aéreo</strong> na região de
-          IGU/SBFI, AGT/SGES e IGR/SARI. Transmissão online da fonia na região de IGU/SBFI, por ser uma região
-          trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos
-          AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
-        <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national
-          area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES
-          and IGR/SARI airports and their respective ACCs.</p>
+  <!-- Sobre: as informações que antes ficavam no card da página agora vivem
+       aqui, atrás do botão de info — o texto continua no HTML -->
+  <dialog class="info-dialog" id="infoDialog" aria-labelledby="infoDialogTitle">
+    <div class="info-dialog-header">
+      <h2 id="infoDialogTitle">Sobre</h2>
+      <button class="info-dialog-close" id="infoCloseBtn" type="button" aria-label="Fechar">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+
+    <div class="info-dialog-body">
+      <p><strong>Ouça ao vivo o controle de tráfego aéreo</strong> na região de
+        IGU/SBFI, AGT/SGES e IGR/SARI. Transmissão online da fonia na região de IGU/SBFI, por ser uma região
+        trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos
+        AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
+      <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national
+        area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES
+        and IGR/SARI airports and their respective ACCs.</p>
+
+      <div class="info-dialog-meta">
+        <span class="info-label">Site</span>
+        <a href="https://atc.iguspotters.com.br/" target="_blank" rel="noopener">atc.iguspotters.com.br</a>
+      </div>
+      <div class="info-dialog-meta">
+        <span class="info-label">Desenvolvedor</span>
+        <a href="https://romildo.net/" target="_blank" rel="noopener">romildo.net</a>
       </div>
     </div>
-  </main>
+
+  </dialog>
 
   <footer>
     <p>Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
@@ -589,12 +795,8 @@
       const player = document.getElementById('radioPlayer');
       const statusEl = document.getElementById('status');
       const playButton = document.getElementById('playButton');
-      const volumeButton = document.getElementById('volumeButton');
-      const volumeSlider = document.getElementById('volumeSlider');
 
       let isPlaying = false;
-      let isMuted = false;
-      let previousVolume = 1.0;
       const streamUrl = 'https://ic.io.tec.br/sbfi';
 
       function getStreamUrl() {
@@ -689,13 +891,6 @@
         playButton.classList.toggle('playing', isPlaying);
       }
 
-      function updateVolumeIcon() {
-        const icon = volumeButton.querySelector('.material-icons');
-        if (isMuted || player.volume === 0) icon.textContent = 'volume_off';
-        else if (player.volume < 0.5) icon.textContent = 'volume_down';
-        else icon.textContent = 'volume_up';
-      }
-
       player.setAttribute('preload', 'none');
 
       // Reconexão: uma por vez, com backoff (3s -> 6s -> 12s -> 24s -> 30s)
@@ -731,29 +926,6 @@
         } else {
           player.pause();
         }
-      });
-
-      // Volume
-      volumeButton.addEventListener('click', function () {
-        if (isMuted) {
-          player.volume = previousVolume;
-          volumeSlider.value = previousVolume * 100;
-          isMuted = false;
-        } else {
-          previousVolume = player.volume;
-          player.volume = 0;
-          volumeSlider.value = 0;
-          isMuted = true;
-        }
-        updateVolumeIcon();
-      });
-
-      volumeSlider.addEventListener('input', function () {
-        const v = this.value / 100;
-        player.volume = v;
-        isMuted = v === 0;
-        if (v > 0) previousVolume = v;
-        updateVolumeIcon();
       });
 
       // Player events
@@ -803,8 +975,6 @@
         setStatus('Transmissão finalizada');
       });
 
-      player.addEventListener('volumechange', updateVolumeIcon);
-
       // Reconectar ao voltar online
       window.addEventListener('online', () => {
         if (isPlaying) reconnectStream('online');
@@ -821,9 +991,9 @@
         }
       }, 5000);
 
+      // Sem controle de volume na página: o som sai em volume cheio e o
+      // ajuste fica por conta do aparelho (igual ao app Android)
       player.volume = 1.0;
-      volumeSlider.value = 100;
-      updateVolumeIcon();
     });
 
     // ==========================================
@@ -887,6 +1057,34 @@
       installBanner.classList.remove('visible');
       deferredPrompt = null;
     });
+  </script>
+
+  <!-- Sobre: abre e fecha o diálogo de informações -->
+  <script>
+    (function () {
+      const dialog = document.getElementById('infoDialog');
+      const openBtn = document.getElementById('infoBtn');
+      if (!dialog || !openBtn) return;
+
+      function close() {
+        if (dialog.open) dialog.close();
+      }
+
+      openBtn.addEventListener('click', function () {
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.setAttribute('open', '');   // navegadores muito antigos
+      });
+
+      ['infoCloseBtn'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', close);
+      });
+
+      // Clicar no fundo escurecido (fora do painel) também fecha
+      dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) close();
+      });
+    })();
   </script>
 
   <!-- Métricas do player (GA4): play, tempo de escuta, buffering, erros -->
