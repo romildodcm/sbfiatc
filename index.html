@@ -523,26 +523,6 @@
       text-decoration: underline;
     }
 
-    .info-dialog-ok {
-      display: block;
-      width: calc(100% - 32px);
-      margin: 0 16px 16px;
-      padding: 10px;
-      font-family: inherit;
-      font-size: 12px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: var(--radar-green);
-      background: transparent;
-      border: 1px solid var(--radar-green);
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .info-dialog-ok:hover {
-      background: var(--radar-green-faint);
-    }
-
     /* ========== THEME TOGGLE ========== */
     .theme-btn {
       position: fixed;
@@ -772,7 +752,6 @@
       </div>
     </div>
 
-    <button class="info-dialog-ok" id="infoOkBtn" type="button">Fechar</button>
   </dialog>
 
   <footer>
@@ -1079,7 +1058,7 @@
         else dialog.setAttribute('open', '');   // navegadores muito antigos
       });
 
-      ['infoCloseBtn', 'infoOkBtn'].forEach(function (id) {
+      ['infoCloseBtn'].forEach(function (id) {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', close);
       });
