@@ -645,7 +645,34 @@
     return seen;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* INTERFACE: DIALOGO "SOBRE" E TEMA                                   */
+  /* ------------------------------------------------------------------ */
+  function onInfoOpen() {
+    gtagSend('radio_info_open', base());
+  }
+
+  // Lê o tema num tick seguinte: o handler da página troca o atributo no
+  // mesmo clique, e a ordem dos listeners não é garantida.
+  function onThemeClick() {
+    setTimeout(function () {
+      gtagSend('radio_theme_change', base({
+        theme: document.documentElement.getAttribute('data-theme') === 'red' ? 'red' : 'green',
+      }));
+    }, 0);
+  }
+
+  function bindUiExtras() {
+    uniqueElements(['#infoBtn'])
+      .forEach(function (btn) { btn.addEventListener('click', onInfoOpen, true); });
+
+    uniqueElements(['#themeToggleBtn'])
+      .forEach(function (btn) { btn.addEventListener('click', onThemeClick, true); });
+  }
+
   function init() {
+    bindUiExtras();
+
     player = document.getElementById('radioPlayer');
     if (!player) return; // página sem player
 
@@ -693,6 +720,8 @@
   // API pública (debug/testes/eventos manuais)
   window.sbfiRadioAnalytics = {
     track: gtagSend,
+    infoOpen: onInfoOpen,
+    themeChange: onThemeClick,
     config: CONFIG,
     getState: function () { return { listener: listener, visit: visit, play: play }; },
   };
