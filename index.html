@@ -350,6 +350,16 @@
       color: var(--radar-green);
     }
 
+    /* Autoplay recusado pelo navegador: o botão pede o toque do ouvinte */
+    .play-btn.needs-gesture {
+      animation: gesturePulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes gesturePulse {
+      0%, 100% { box-shadow: 0 0 0 0 var(--radar-green-glow); }
+      50% { box-shadow: 0 0 16px 5px var(--radar-green-glow); }
+    }
+
     /* ========== BOTÃO DE GRAVAÇÃO ========== */
     .record-btn {
       position: relative;   /* âncora do tooltip */
@@ -792,7 +802,7 @@
         </button>
       </div>
 
-      <audio id="radioPlayer" preload="none" muted crossorigin="anonymous">
+      <audio id="radioPlayer" preload="none" crossorigin="anonymous">
         <source src="https://ic.io.tec.br/sbfi" type="audio/mpeg">
       </audio>
     </div>
@@ -968,20 +978,75 @@
         }, delay);
       }
 
+      // --- Autoplay ---------------------------------------------------------
+      // A página abre já tentando tocar a fonia. Os navegadores só liberam
+      // áudio com som depois de um gesto do usuário: se a tentativa for
+      // recusada (NotAllowedError), o primeiro toque/clique/tecla em qualquer
+      // ponto da página destrava o player.
+      let gestureArmed = false;
+      let startInFlight = false;   // tentativa em andamento (evita start duplo)
+      let playAttempt = 0;
+
+      function disarmGestureUnlock() {
+        if (!gestureArmed) return;
+        gestureArmed = false;
+        playButton.classList.remove('needs-gesture');
+        document.removeEventListener('pointerdown', unlockOnGesture, true);
+        document.removeEventListener('touchstart', unlockOnGesture, true);
+        document.removeEventListener('keydown', unlockOnGesture, true);
+      }
+
+      // Roda DENTRO do gesto: o play() precisa ser síncrono aqui, senão o
+      // Safari/iOS recusa (a permissão vale só para a pilha do evento).
+      function unlockOnGesture() {
+        disarmGestureUnlock();
+        if (player.paused) startPlayback();
+      }
+
+      function armGestureUnlock() {
+        if (gestureArmed) return;
+        gestureArmed = true;
+        playButton.classList.add('needs-gesture');
+        document.addEventListener('pointerdown', unlockOnGesture, true);
+        document.addEventListener('touchstart', unlockOnGesture, true);
+        document.addEventListener('keydown', unlockOnGesture, true);
+      }
+
+      // Abre conexão nova e toca. Chamado pelo autoplay, pelo gesto de
+      // destrave e pelo botão de play.
+      function startPlayback() {
+        if (startInFlight) return;
+        startInFlight = true;
+
+        clearTimeout(waitingTimer);
+        clearTimeout(liveTimer);
+        disarmGestureUnlock();
+        setStatus('Conectando...');
+        player.muted = false;
+        reloadStream();
+
+        const attempt = ++playAttempt;
+        player.play().catch((err) => {
+          if (attempt !== playAttempt) return;            // tentativa substituída
+          if (err && err.name === 'AbortError') return;   // load() cancelou o play
+          startInFlight = false;
+          if (err && err.name === 'NotAllowedError') {
+            isPlaying = false;
+            updatePlayIcon();
+            setStatus('Toque para ouvir');
+            armGestureUnlock();
+            return;
+          }
+          isPlaying = false;
+          updatePlayIcon();
+          setStatus('Falha na conexão');
+        });
+      }
+
       // Play / Pause
       playButton.addEventListener('click', function () {
         if (player.paused) {
-          clearTimeout(waitingTimer);
-          clearTimeout(liveTimer);
-          setStatus('Conectando...');
-          reloadStream();
-          setTimeout(() => {
-            player.play().catch(() => {
-              setStatus('Falha na conexão');
-              isPlaying = false;
-              updatePlayIcon();
-            });
-          }, 100);
+          startPlayback();
         } else {
           player.pause();
         }
@@ -1004,6 +1069,8 @@
 
       player.addEventListener('play', () => {
         isPlaying = true;
+        startInFlight = false;
+        disarmGestureUnlock();
         updatePlayIcon();
         confirmLive();
         if (player.muted) player.muted = false;
@@ -1019,6 +1086,8 @@
         updatePlayIcon();
         clearTimeout(waitingTimer);
         clearTimeout(liveTimer);
+        // Autoplay recusado: o status precisa continuar pedindo o toque
+        if (gestureArmed) return;
         setStatus('Disponível');
       });
 
@@ -1053,6 +1122,26 @@
       // Sem controle de volume na página: o som sai em volume cheio e o
       // ajuste fica por conta do aparelho (igual ao app Android)
       player.volume = 1.0;
+
+      // Autoplay: a fonia começa a tocar já na abertura da página, mas só com
+      // a aba à vista (igual ao YouTube). Aberta em segundo plano, nada toca
+      // escondido: o primeiro autoplay espera a aba ser acessada.
+      function autoplayFirstVisible() {
+        if (document.visibilityState !== 'visible') return;
+        document.removeEventListener('visibilitychange', autoplayFirstVisible);
+        if (player.paused) startPlayback();
+      }
+
+      if (document.visibilityState === 'hidden') {
+        document.addEventListener('visibilitychange', autoplayFirstVisible);
+      } else {
+        startPlayback();
+      }
+
+      // Voltando pelo histórico (bfcache) o áudio pode voltar pausado
+      window.addEventListener('pageshow', (e) => {
+        if (e.persisted && player.paused && document.visibilityState === 'visible') startPlayback();
+      });
     });
 
     // ==========================================

@@ -286,6 +286,12 @@
   function ensureGraph() {
     if (analyser) { resumeCtx(); return true; }
     if (!ensureContext()) return false;
+    resumeCtx();
+    // Contexto suspenso engole o som do elemento (o grafo passa a ser o único
+    // destino do áudio). Só cria o nó com o contexto rodando de verdade: no
+    // autoplay o contexto pode nascer suspenso e o gesto é quem destrava
+    // (ver retryGraph no init), em vez de deixar a fonia muda.
+    if (audioCtx.state !== 'running') return false;
     try {
       var source = audioCtx.createMediaElementSource(player);
       analyser = audioCtx.createAnalyser();
@@ -332,9 +338,24 @@
     // grafo entrega silêncio para sempre.
     function startGraph() {
       if (player.muted) player.muted = false;
-      ensureGraph();
+      var ok = ensureGraph();
       onPlaying();
+      return ok;
     }
+
+    // O autoplay pode ter começado a tocar antes de o contexto de áudio poder
+    // rodar (ex.: Safari com auto-play liberado). O grafo não foi criado para
+    // não mutar a fonia; o primeiro gesto tenta criar de novo.
+    function retryGraph() {
+      if (analyser || !player || player.paused) return;
+      if (!startGraph() && audioCtx) {
+        audioCtx.resume().then(retryGraph, function () { /* ignora */ });
+      }
+    }
+
+    ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) {
+      document.addEventListener(ev, retryGraph, true);
+    });
 
     player.addEventListener('playing', startGraph);
     player.addEventListener('play', startGraph);
