@@ -35,7 +35,10 @@
      <script src="/radio-recorder.js" defer></script>
 
    Ajustes opcionais (declarar antes deste script):
-     window.SBFI_RADIO_RECORDER = { maxMinutes: 60, streamUrl: '...' };
+     window.SBFI_RADIO_RECORDER = { maxMinutes: 60, streamUrl: '...', filePrefix: 'sbfi2-fonia-' };
+
+     filePrefix troca o começo do nome do MP3 baixado — útil quando existe mais
+     de uma página apontando para mounts diferentes (ex.: /secundary -> sbfi2).
 
    Debug: abrir a página com ?radio_rec_debug=1
    ========================================================================== */
@@ -47,6 +50,7 @@
 
   var CONFIG = Object.assign({
     streamUrl: 'https://ic.io.tec.br/sbfi',
+    filePrefix: 'sbfi-fonia-',   // começo do nome do MP3 baixado
     maxMinutes: 240,        // trava de segurança (~14 MB por hora, em 32 kbps)
     minBytes: 4096,         // abaixo disso foi curto demais (~1s) para valer arquivo
     retryDelayMs: 2000,     // espera entre tentativas se a conexão cair
@@ -123,7 +127,7 @@
 
   function fileName() {
     var d = new Date();
-    return 'sbfi-fonia-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+    return CONFIG.filePrefix + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
       '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + '.mp3';
   }
 
