@@ -64,6 +64,8 @@
 
   var LABEL_IDLE = 'Gravar Fonia ATC';
   var LABEL_RECORDING = 'Gravando Fonia ATC';
+  var ARIA_IDLE = 'Gravar a fonia (MP3)';
+  var ARIA_RECORDING = 'Parar a gravação e baixar o MP3';
 
   var btn = null;
   var label = null;
@@ -303,6 +305,9 @@
     // Rótulos vêm do HTML (data-label-*), com fallback
     if (btn.dataset.labelIdle !== undefined) LABEL_IDLE = btn.dataset.labelIdle;
     if (btn.dataset.labelRecording) LABEL_RECORDING = btn.dataset.labelRecording;
+    // aria-label também pode vir do HTML, para páginas em outro idioma
+    if (btn.dataset.ariaIdle) ARIA_IDLE = btn.dataset.ariaIdle;
+    if (btn.dataset.ariaRecording) ARIA_RECORDING = btn.dataset.ariaRecording;
 
     btn.addEventListener('click', onButtonClick);
     setUi(false);
@@ -354,7 +359,7 @@
     if (!btn) return;
     btn.classList.toggle('recording', state);
     // Sem title: quem explica o botão é o tooltip estilizado (.record-tip)
-    btn.setAttribute('aria-label', state ? 'Parar gravação e baixar o MP3' : 'Gravar fonia (MP3)');
+    btn.setAttribute('aria-label', state ? ARIA_RECORDING : ARIA_IDLE);
     setLabel(state ? LABEL_RECORDING : LABEL_IDLE);
     if (label) label.classList.remove('warn');
     if (counter) counter.textContent = '';
