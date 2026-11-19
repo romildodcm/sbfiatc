@@ -1,5 +1,5 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v12';
+const CACHE_NAME = 'sbfi-atc-v13';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
@@ -10,6 +10,8 @@ const STATIC_RESOURCES = [
   '/painel/',
   '/painel/painel.css',
   '/painel/painel.js',
+  // Canal secundário (mount sbfi2) — não é linkado no site, só acesso direto
+  '/secundary/',
   '/radio-analytics.js',
   '/radio-recorder.js',
   '/radio-waveform.js',

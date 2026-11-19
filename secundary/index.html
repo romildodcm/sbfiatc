@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Configurações anti-cache para stream de áudio -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
+  <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
+  <link rel="manifest" href="/favicon/site.webmanifest">
+  <!-- Ícone que fica ao fundo do player: começa a baixar junto com o HTML,
+       em vez de esperar o navegador chegar no <img> lá no fim da página -->
+  <link rel="preload" as="image" href="/favicon/android-chrome-512x512.png">
+
+  <!-- SEO básico — página secundária: não é linkada em lugar nenhum
+       (acesso manual) e fica fora dos buscadores -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Canal secundário (mount sbfi2) da fonia aérea (ATC) de IGU/SBFI — Foz do Iguaçu.">
+  <meta name="keywords" content="SBFI2, SBFI canal secundário, fonia aérea IGU, ATC live, mount sbfi2">
+  <meta name="theme-color" content="#0a0a0a">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:url" content="https://atc.iguspotters.com.br/secundary">
+  <meta property="og:site_name" content="IGU/SBFI2 ATC">
+  <meta property="og:title" content="IGU/SBFI2 ATC ao vivo — Fonia aérea IGU/SBFI (canal secundário)">
+  <meta property="og:description" content="Canal secundário (mount sbfi2) da fonia aérea (ATC) de IGU/SBFI — Foz do Iguaçu.">
+  <meta property="og:image" content="https://atc.iguspotters.com.br/favicon/android-chrome-512x512.png">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="IGU/SBFI2 ATC ao vivo — Fonia aérea IGU/SBFI (canal secundário)">
+  <meta name="twitter:description" content="Canal secundário (mount sbfi2) da fonia aérea (ATC) de IGU/SBFI.">
+  <meta name="twitter:image" content="https://atc.iguspotters.com.br/favicon/android-chrome-512x512.png">
+
+  <!-- Dados estruturados: WebSite + WebApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "IGU/SBFI2 ATC",
+    "url": "https://atc.iguspotters.com.br/secundary",
+    "inLanguage": "pt-BR",
+    "description": "Canal secundário (mount sbfi2) da fonia aérea (ATC) de IGU/SBFI."
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "IGU/SBFI2 ATC",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Android, iOS, Web",
+    "url": "https://atc.iguspotters.com.br/secundary",
+    "image": "https://atc.iguspotters.com.br/favicon/android-chrome-512x512.png",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" }
+  }
+  </script>
+
+  <title>IGU/SBFI2 ATC ao vivo — Fonia aérea (canal secundário)</title>
+
+  <style>
+    /* ========== RADAR THEME ========== */
+    :root {
+      --radar-bg: #0a0a0a;
+      --radar-green: #00ff41;
+      --radar-green-dim: #00cc33;
+      --radar-green-faint: rgba(0, 255, 65, 0.15);
+      --radar-green-glow: rgba(0, 255, 65, 0.4);
+      --radar-text: #00ff41;
+      --radar-text-dim: rgba(0, 255, 65, 0.6);
+      --radar-panel-bg: rgba(10, 10, 10, 0.92);
+      --radar-border: rgba(0, 255, 65, 0.3);
+    }
+
+    [data-theme="red"] {
+      --radar-green: #ff3333;
+      --radar-green-dim: #cc2828;
+      --radar-green-faint: rgba(255, 51, 51, 0.15);
+      --radar-green-glow: rgba(255, 51, 51, 0.4);
+      --radar-text: #ff3333;
+      --radar-text-dim: rgba(255, 51, 51, 0.6);
+      --radar-panel-bg: rgba(10, 5, 5, 0.92);
+      --radar-border: rgba(255, 51, 51, 0.3);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Roboto Mono', monospace;
+      background: var(--radar-bg);
+      color: var(--radar-text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ========== HEADER ========== */
+    .radar-header {
+      background: var(--radar-panel-bg);
+      border-bottom: 1px solid var(--radar-border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      flex-shrink: 0;
+    }
+
+    .radar-header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-nav a {
+      color: var(--radar-text-dim);
+      text-decoration: none;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .header-nav a:hover {
+      color: var(--radar-green);
+    }
+
+    .header-nav a.active {
+      color: var(--radar-green);
+    }
+
+    /* ========== MAIN ========== */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px 80px;
+      width: 100%;
+      max-width: 560px;
+      gap: 24px;
+    }
+
+    /* ========== PLAYER QUADRADO (inspirado no app Android) ========== */
+    .player-square {
+      position: relative;
+      width: 100%;
+      max-width: 340px;
+      margin: 0 auto;
+      aspect-ratio: 1 / 1;
+      padding: 48px 0 76px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      /* Sem overflow: hidden para o tooltip da gravação poder abrir para baixo.
+         O recorte do fundo é feito pelo border-radius nas próprias camadas. */
+      background: var(--radar-panel-bg);
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+    }
+
+    /* Ícone do site ao fundo — como o card do app Android */
+    .player-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.22;
+      pointer-events: none;
+      border-radius: inherit;
+      transition: opacity 0.25s ease;
+    }
+
+    /* No modo noturno (vermelho) o fundo fica preto, sem o ícone */
+    [data-theme="red"] .player-bg {
+      opacity: 0;
+    }
+
+    /* Fade sobre a imagem (equivalente ao fade_overlay do Android) */
+    .player-fade {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(10, 10, 10, 0) 0%, rgba(10, 10, 10, 0.72) 72%),
+        linear-gradient(180deg, rgba(10, 10, 10, 0.6) 0%, rgba(10, 10, 10, 0.15) 45%, rgba(10, 10, 10, 0.9) 100%);
+    }
+
+    /* Meio do quadrado: waveform + estado */
+    .player-center {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .waveform {
+      display: block;
+      width: 100%;
+      height: 84px;
+    }
+
+    .player-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 18px;
+      margin-top: 12px;
+    }
+
+    .player-status .status-text {
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .player-status .status-text.live {
+      animation: pulse-text 2s infinite;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--radar-green);
+      box-shadow: 0 0 6px var(--radar-green-glow);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .player-square.playing .live-dot,
+    .player-square:has(.play-btn.playing) .live-dot {
+      opacity: 1;
+      animation: pulse-text 1.4s infinite;
+    }
+
+    @keyframes pulse-text {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Linha do REC — só aparece gravando; altura reservada p/ não deslocar */
+    .rec-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 16px;
+      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .rec-status .record-label:empty,
+    .rec-status .record-counter:empty {
+      display: none;
+    }
+
+    .rec-status .record-counter {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .rec-status .record-label.warn {
+      color: var(--radar-green);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      text-transform: none;
+    }
+
+    /* Rodapé do quadrado: nome da fonia, gravar, play */
+    .player-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+    }
+
+    .player-bottom .channel-name {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+      text-shadow: 0 0 8px var(--radar-green-glow);
+    }
+
+    .play-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 2px solid var(--radar-green);
+      background: rgba(10, 10, 10, 0.45);
+      color: var(--radar-green);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .play-btn:hover,
+    .play-btn.playing {
+      background: var(--radar-green-faint);
+      box-shadow: 0 0 12px var(--radar-green-glow);
+    }
+
+    .play-btn .material-icons {
+      font-size: 24px;
+      color: var(--radar-green);
+    }
+
+    /* Autoplay recusado pelo navegador: o botão pede o toque do ouvinte */
+    .play-btn.needs-gesture {
+      animation: gesturePulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes gesturePulse {
+      0%, 100% { box-shadow: 0 0 0 0 var(--radar-green-glow); }
+      50% { box-shadow: 0 0 16px 5px var(--radar-green-glow); }
+    }
+
+    /* ========== BOTÃO DE GRAVAÇÃO ========== */
+    .record-btn {
+      position: relative;   /* âncora do tooltip */
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--radar-border);
+      background: rgba(10, 10, 10, 0.45);
+      color: var(--radar-green);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .record-btn:hover {
+      border-color: var(--radar-green);
+      background: var(--radar-green-faint);
+    }
+
+    .record-btn .material-icons {
+      font-size: 18px;
+      color: inherit;
+    }
+
+    .record-btn.recording {
+      border-color: var(--radar-green);
+      background: var(--radar-green-faint);
+      box-shadow: 0 0 12px var(--radar-green-glow);
+    }
+
+    .record-btn.recording .material-icons {
+      animation: recPulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes recPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.25; }
+    }
+
+    /* Tooltip do botão de gravar: explica que a gravação volta no tempo.
+       Aparece no hover (mouse) e no foco (teclado) — no toque quem avisa é a
+       própria faixa, que mostra "Inclui X anteriores" ao iniciar. */
+    .record-tip {
+      position: absolute;
+      top: calc(100% + 14px);
+      right: -8px;
+      z-index: 5;
+      width: 208px;
+      padding: 10px 12px;
+      border: 1px solid var(--radar-green);
+      border-radius: 4px;
+      background: rgba(10, 10, 10, 0.96);
+      box-shadow: 0 0 18px var(--radar-green-glow);
+      color: var(--radar-text-dim);
+      font-size: 11px;
+      line-height: 1.55;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: left;
+      text-transform: none;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+      pointer-events: none;
+    }
+
+    .record-tip strong {
+      color: var(--radar-green);
+      font-weight: 700;
+    }
+
+    /* Setinha apontando para o botão (que fica acima do balão) */
+    .record-tip::after {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      right: 20px;
+      border: 6px solid transparent;
+      border-bottom-color: var(--radar-green);
+    }
+
+    .record-btn:hover .record-tip,
+    .record-btn:focus-visible .record-tip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    /* ========== BOTÃO DE INFORMAÇÕES ========== */
+    .info-btn {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      z-index: 2;
+      /* sem moldura: só o ícone, com um alvo de toque confortável */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--radar-green);
+      opacity: 0.8;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .info-btn:hover {
+      opacity: 1;
+    }
+
+    .info-btn:active {
+      transform: scale(0.92);
+    }
+
+    .info-btn:focus-visible {
+      outline: 1px solid var(--radar-green);
+      outline-offset: -4px;
+      border-radius: 4px;
+      opacity: 1;
+    }
+
+    .info-btn .material-icons {
+      font-size: 20px;
+      color: var(--radar-green);
+    }
+
+    /* ========== DIÁLOGO SOBRE ========== */
+    .info-dialog {
+      width: min(92vw, 460px);
+      max-height: 82vh;
+      padding: 0;
+      /* o reset global (* { margin: 0 }) apaga o margin: auto com que o
+         navegador centraliza um <dialog> modal, entao devolvemos aqui */
+      margin: auto;
+      border: 1px solid var(--radar-border);
+      border-radius: 4px;
+      background: var(--radar-panel-bg);
+      color: var(--radar-text-dim);
+      font-family: 'Roboto Mono', monospace;
+      font-size: 12.5px;
+      line-height: 1.75;
+      box-shadow: 0 0 30px var(--radar-green-faint);
+      overflow: auto;
+    }
+
+    .info-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(2px);
+    }
+
+    .info-dialog[open] {
+      animation: infoIn 0.18s ease-out;
+    }
+
+    @keyframes infoIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .info-dialog-header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--radar-border);
+      background: var(--radar-panel-bg);
+    }
+
+    .info-dialog-header h2 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--radar-green);
+    }
+
+    .info-dialog-close {
+      display: flex;
+      padding: 2px;
+      background: none;
+      border: none;
+      color: var(--radar-green);
+      cursor: pointer;
+    }
+
+    .info-dialog-close .material-icons {
+      font-size: 18px;
+    }
+
+    .info-dialog-body {
+      padding: 16px;
+    }
+
+    .info-dialog-body p {
+      margin-bottom: 12px;
+      text-align: justify;
+    }
+
+    .info-dialog-body strong {
+      color: var(--radar-green);
+      font-weight: 700;
+    }
+
+    .info-dialog-body .english {
+      font-style: italic;
+      opacity: 0.7;
+      margin-bottom: 18px;
+    }
+
+    .info-dialog-meta {
+      margin-bottom: 10px;
+    }
+
+    .info-dialog-meta:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-dialog-meta .info-label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    .info-dialog-meta a {
+      color: var(--radar-green);
+      text-decoration: none;
+    }
+
+    .info-dialog-meta a:hover {
+      text-decoration: underline;
+    }
+
+    /* ========== THEME TOGGLE ========== */
+    .theme-btn {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: var(--radar-panel-bg);
+      border: 1px solid var(--radar-border);
+      color: var(--radar-green);
+      width: 30px;
+      height: 30px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: all 0.2s;
+    }
+
+    .theme-btn:hover {
+      background: var(--radar-green-faint);
+    }
+
+    .theme-btn .material-icons {
+      font-size: 16px;
+      color: var(--radar-green);
+    }
+
+    /* ========== FOOTER ========== */
+    footer {
+      width: 100%;
+      padding: 12px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--radar-text-dim);
+      border-top: 1px solid var(--radar-border);
+      position: relative;
+    }
+
+    footer a {
+      color: var(--radar-green);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--radar-green);
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media screen and (max-width: 480px) {
+      .radar-header h1 {
+        font-size: 13px;
+        letter-spacing: 1px;
+      }
+
+      main {
+        padding: 24px 22px 80px;
+        gap: 16px;
+      }
+
+      .player-square {
+        max-width: 100%;
+        padding: 40px 0 70px;
+      }
+
+      .waveform {
+        height: 72px;
+      }
+
+      .play-btn {
+        width: 42px;
+        height: 42px;
+      }
+    }
+
+    /* ========== PWA INSTALL BANNER ========== */
+    .install-banner {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--radar-panel-bg);
+      border-top: 1px solid var(--radar-border);
+      padding: 12px 16px;
+      z-index: 2000;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      backdrop-filter: blur(8px);
+    }
+
+    .install-banner.visible {
+      display: flex;
+    }
+
+    .install-banner-text {
+      font-size: 12px;
+      color: var(--radar-text);
+      flex: 1;
+    }
+
+    .install-banner-btn {
+      background: transparent;
+      border: 1px solid var(--radar-green);
+      color: var(--radar-green);
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .install-banner-close {
+      background: none;
+      border: none;
+      color: var(--radar-text-dim);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+    }
+
+    .install-banner-close .material-icons {
+      font-size: 18px;
+    }
+
+    #radioPlayer {
+      display: none;
+    }
+  </style>
+
+  <!-- Canal secundário: sobrescreve o mount usado pelos módulos compartilhados.
+       Precisa vir antes dos scripts abaixo (que rodam depois, com defer). -->
+  <script>
+    window.SBFI_RADIO_ANALYTICS = { stream: 'sbfi2', streamUrl: 'ic.io.tec.br/sbfi2' };
+    window.SBFI_RADIO_RECORDER = {
+      streamUrl: 'https://ic.io.tec.br/sbfi2',
+      filePrefix: 'sbfi2-fonia-'
+    };
+  </script>
+
+  <!-- Waveform do áudio ao vivo -->
+  <script src="/radio-waveform.js" defer></script>
+
+  <!-- Botão de gravação da fonia (grava e baixa o MP3) -->
+  <script src="/radio-recorder.js" defer></script>
+</head>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-77CSXLKNXG"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { dataLayer.push(arguments); }
+  gtag('js', new Date());
+  gtag('config', 'G-77CSXLKNXG');
+</script>
+
+<body>
+  <!-- HEADER -->
+  <div class="radar-header">
+    <h1>SBFI2 Area ATC</h1>
+  </div>
+
+  <main>
+    <!-- Player de Áudio — quadrado, inspirado no app Android -->
+    <div class="player-square" id="playerSquare">
+      <img class="player-bg" src="/favicon/android-chrome-512x512.png" alt="" aria-hidden="true">
+      <div class="player-fade" aria-hidden="true"></div>
+
+      <!-- Info: mesma posição do botão de informações do app Android -->
+      <button class="info-btn" id="infoBtn" type="button" title="Sobre" aria-label="Sobre">
+        <span class="material-icons">info_outline</span>
+      </button>
+
+      <!-- Meio: waveform do áudio ao vivo + estado -->
+      <div class="player-center">
+        <canvas id="waveformCanvas" class="waveform" aria-hidden="true"></canvas>
+        <div class="player-status">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="status-text" id="status">Disponível</span>
+        </div>
+        <div class="rec-status">
+          <span class="record-label" id="recordLabel"></span>
+          <span class="record-counter" id="recordCounter" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <!-- Rodapé: nome da fonia, gravar e play -->
+      <div class="player-bottom">
+        <span class="channel-name">IGU/SBFI2 Area</span>
+        <button class="record-btn" id="recordBtn" type="button"
+          aria-describedby="recordTip"
+          data-label-idle="" data-label-recording="Gravando">
+          <span class="material-icons">fiber_manual_record</span>
+          <span class="record-tip" id="recordTip" role="tooltip">
+            Grava a fonia ao vivo em MP3. Se você já está ouvindo, os últimos
+            <strong>2 minutos</strong> entram no arquivo.
+          </span>
+        </button>
+        <button class="play-btn" id="playButton" title="Ouvir fonia ATC">
+          <span class="material-icons">play_arrow</span>
+        </button>
+      </div>
+
+      <audio id="radioPlayer" preload="none" crossorigin="anonymous">
+        <source src="https://ic.io.tec.br/sbfi2" type="audio/mpeg">
+      </audio>
+    </div>
+
+  </main>
+
+  <!-- Sobre: as informações que antes ficavam no card da página agora vivem
+       aqui, atrás do botão de info — o texto continua no HTML -->
+  <dialog class="info-dialog" id="infoDialog" aria-labelledby="infoDialogTitle">
+    <div class="info-dialog-header">
+      <h2 id="infoDialogTitle">Sobre</h2>
+      <button class="info-dialog-close" id="infoCloseBtn" type="button" aria-label="Fechar">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+
+    <div class="info-dialog-body">
+      <p><strong>Ouça ao vivo o controle de tráfego aéreo</strong> na região de
+        IGU/SBFI, AGT/SGES e IGR/SARI. Transmissão online da fonia na região de IGU/SBFI, por ser uma região
+        trinacional Brasil-Paraguai-Argentina, nesta fonia também é possível escutar as comunicações dos aeroportos
+        AGT/SGES e IGR/SARI e seus respectivos ACCs.</p>
+      <p class="english">Online transmission of the ATC communication in the IGU/SBFI region, being a tri-national
+        area comprising Brazil, Paraguay, and Argentina, also allows for listening to the communications of AGT/SGES
+        and IGR/SARI airports and their respective ACCs.</p>
+
+      <div class="info-dialog-meta">
+        <span class="info-label">Canal</span>
+        <span>Secundário — mount <strong>sbfi2</strong></span>
+      </div>
+      <div class="info-dialog-meta">
+        <span class="info-label">Site</span>
+        <a href="https://atc.iguspotters.com.br/" target="_blank" rel="noopener">atc.iguspotters.com.br</a>
+      </div>
+      <div class="info-dialog-meta">
+        <span class="info-label">Desenvolvedor</span>
+        <a href="https://romildo.net/" target="_blank" rel="noopener">romildo.net</a>
+      </div>
+    </div>
+
+  </dialog>
+
+  <footer>
+    <p>Copyright &copy; by <a href="http://iguspotters.com.br/">iguspotters.com.br</a></p>
+  </footer>
+
+  <!-- PWA Install Banner -->
+  <div class="install-banner" id="installBanner">
+    <span class="install-banner-text">Adicionar SBFI2 ATC à tela inicial</span>
+    <button class="install-banner-btn" id="installBtn">Instalar</button>
+    <button class="install-banner-close" id="installClose"><span class="material-icons">close</span></button>
+  </div>
+
+  <!-- Theme toggle -->
+  <button class="theme-btn" id="themeToggleBtn" title="Tema noturno (vermelho)">
+    <span class="material-icons">brightness_4</span>
+  </button>
+
+  <script>
+    // ==========================================
+    // PLAYER DE ÁUDIO — BAIXA LATÊNCIA
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', function () {
+      const player = document.getElementById('radioPlayer');
+      const statusEl = document.getElementById('status');
+      const playButton = document.getElementById('playButton');
+
+      let isPlaying = false;
+      const streamUrl = 'https://ic.io.tec.br/sbfi2';
+
+      function getStreamUrl() {
+        return `${streamUrl}?t=${Date.now()}&r=${Math.random().toString(36).substring(7)}&nocache=1`;
+      }
+
+      // --- Estabilidade do player (fonia ao vivo) --------------------------
+      // A folga de buffer É o atraso em relação ao ao vivo: 2,5s absorve o
+      // jitter da rede mantendo o áudio contínuo.
+      const CUSHION_S = 2.5;
+      const JOIN_REALIGN_OVER_S = 4;    // só realinha na entrada se o buffer vier maior que isso
+      const MAX_DRIFT_S = 20;           // atraso absurdo (pós-reconexão) -> 1 realinhamento
+      const DRIFT_COOLDOWN_MS = 120000;
+      const WAITING_DEBOUNCE_MS = 1500; // espera para mostrar "Aguardando dados..."
+      const LIVE_CONFIRM_MS = 1000;     // tempo tocando para confirmar "AO VIVO"
+      const BACKOFF_START_MS = 3000;
+      const BACKOFF_MAX_MS = 30000;
+      const STALL_RELOAD_MS = 15000;    // só recarrega após isso sem progresso
+
+      let waitingTimer = null;
+      let liveTimer = null;
+      let alignedThisConnection = false;
+      let lastDriftFixAt = 0;
+      let lastProgressAt = Date.now();
+
+      function reloadStream() {
+        const source = player.querySelector('source');
+        source.src = getStreamUrl();
+        player.load();
+        alignedThisConnection = false;
+      }
+
+      function setStatus(text, live) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle('live', !!live);
+      }
+
+      // Status sem piscar: só avisa se o problema persistir e só confirma
+      // "AO VIVO" depois de um tempo estável.
+      function scheduleWaiting() {
+        clearTimeout(liveTimer);
+        liveTimer = null;
+        if (waitingTimer) return;
+        waitingTimer = setTimeout(() => {
+          waitingTimer = null;
+          if (!player.paused) setStatus('Aguardando dados...');
+        }, WAITING_DEBOUNCE_MS);
+      }
+
+      function confirmLive() {
+        clearTimeout(waitingTimer);
+        waitingTimer = null;
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => {
+          liveTimer = null;
+          if (isPlaying && !player.paused) {
+            reconnectAttempts = 0;   // tocou de verdade: zera o backoff
+            setStatus('AO VIVO', true);
+          }
+        }, LIVE_CONFIRM_MS);
+      }
+
+      // Alinhamento único: posiciona o playhead deixando CUSHION_S de folga.
+      // Depois disso o currentTime NÃO é mais tocado durante a reprodução.
+      function alignToLiveEdge(force) {
+        if (!force && alignedThisConnection) return;
+        try {
+          if (!player.buffered.length) return;
+          const end = player.buffered.end(player.buffered.length - 1);
+          if (end - player.currentTime <= JOIN_REALIGN_OVER_S) return;
+          player.currentTime = Math.max(0, end - CUSHION_S);
+          alignedThisConnection = true;
+        } catch (e) { }
+      }
+
+      // Rede de segurança: só age em atraso anormal, no máximo 1x a cada 2 min.
+      function fixHugeDrift() {
+        if (!isPlaying || player.paused) return;
+        if (Date.now() - lastDriftFixAt < DRIFT_COOLDOWN_MS) return;
+        try {
+          if (!player.buffered.length) return;
+          const end = player.buffered.end(player.buffered.length - 1);
+          if (end - player.currentTime > MAX_DRIFT_S) {
+            player.currentTime = end - CUSHION_S;
+            lastDriftFixAt = Date.now();
+          }
+        } catch (e) { }
+      }
+
+      function updatePlayIcon() {
+        playButton.querySelector('.material-icons').textContent = isPlaying ? 'pause' : 'play_arrow';
+        playButton.classList.toggle('playing', isPlaying);
+      }
+
+      player.setAttribute('preload', 'none');
+
+      // Reconexão: uma por vez, com backoff (3s -> 6s -> 12s -> 24s -> 30s)
+      let reconnectTimeout = null;
+      let reconnectAttempts = 0;
+
+      function reconnectStream(trigger) {
+        if (!isPlaying || reconnectTimeout) return;
+        reconnectAttempts += 1;
+        const delay = Math.min(BACKOFF_START_MS * Math.pow(2, reconnectAttempts - 1), BACKOFF_MAX_MS);
+        setStatus('Reconectando...');
+        reconnectTimeout = setTimeout(() => {
+          reconnectTimeout = null;
+          reloadStream();
+          player.play().catch(() => reconnectStream('play-falhou'));
+        }, delay);
+      }
+
+      // --- Autoplay ---------------------------------------------------------
+      // A página abre já tentando tocar a fonia. Os navegadores só liberam
+      // áudio com som depois de um gesto do usuário: se a tentativa for
+      // recusada (NotAllowedError), o primeiro toque/clique/tecla em qualquer
+      // ponto da página destrava o player.
+      let gestureArmed = false;
+      let startInFlight = false;   // tentativa em andamento (evita start duplo)
+      let playAttempt = 0;
+
+      function disarmGestureUnlock() {
+        if (!gestureArmed) return;
+        gestureArmed = false;
+        playButton.classList.remove('needs-gesture');
+        document.removeEventListener('pointerdown', unlockOnGesture, true);
+        document.removeEventListener('touchstart', unlockOnGesture, true);
+        document.removeEventListener('keydown', unlockOnGesture, true);
+      }
+
+      // Roda DENTRO do gesto: o play() precisa ser síncrono aqui, senão o
+      // Safari/iOS recusa (a permissão vale só para a pilha do evento).
+      function unlockOnGesture() {
+        disarmGestureUnlock();
+        if (player.paused) startPlayback();
+      }
+
+      function armGestureUnlock() {
+        if (gestureArmed) return;
+        gestureArmed = true;
+        playButton.classList.add('needs-gesture');
+        document.addEventListener('pointerdown', unlockOnGesture, true);
+        document.addEventListener('touchstart', unlockOnGesture, true);
+        document.addEventListener('keydown', unlockOnGesture, true);
+      }
+
+      // Abre conexão nova e toca. Chamado pelo autoplay, pelo gesto de
+      // destrave e pelo botão de play.
+      function startPlayback() {
+        if (startInFlight) return;
+        startInFlight = true;
+
+        clearTimeout(waitingTimer);
+        clearTimeout(liveTimer);
+        disarmGestureUnlock();
+        setStatus('Conectando...');
+        player.muted = false;
+        reloadStream();
+
+        const attempt = ++playAttempt;
+        player.play().catch((err) => {
+          if (attempt !== playAttempt) return;            // tentativa substituída
+          if (err && err.name === 'AbortError') return;   // load() cancelou o play
+          startInFlight = false;
+          if (err && err.name === 'NotAllowedError') {
+            isPlaying = false;
+            updatePlayIcon();
+            setStatus('Toque para ouvir');
+            armGestureUnlock();
+            return;
+          }
+          isPlaying = false;
+          updatePlayIcon();
+          setStatus('Falha na conexão');
+        });
+      }
+
+      // Play / Pause
+      playButton.addEventListener('click', function () {
+        if (player.paused) {
+          startPlayback();
+        } else {
+          player.pause();
+        }
+      });
+
+      // Player events
+      player.addEventListener('canplay', () => {
+        alignToLiveEdge(false);   // único alinhamento, só na entrada da conexão
+        if (!player.paused) confirmLive();
+      });
+
+      player.addEventListener('playing', () => {
+        lastProgressAt = Date.now();
+        confirmLive();
+      });
+
+      player.addEventListener('timeupdate', () => {
+        lastProgressAt = Date.now();
+      });
+
+      player.addEventListener('play', () => {
+        isPlaying = true;
+        startInFlight = false;
+        disarmGestureUnlock();
+        updatePlayIcon();
+        confirmLive();
+        if (player.muted) player.muted = false;
+      });
+
+      // "waiting"/"stalled" só avisam se a espera persistir (sem piscar) e
+      // NÃO recarregam o stream: na maioria das vezes ele recupera sozinho.
+      player.addEventListener('waiting', scheduleWaiting);
+      player.addEventListener('stalled', scheduleWaiting);
+
+      player.addEventListener('pause', () => {
+        isPlaying = false;
+        updatePlayIcon();
+        clearTimeout(waitingTimer);
+        clearTimeout(liveTimer);
+        // Autoplay recusado: o status precisa continuar pedindo o toque
+        if (gestureArmed) return;
+        setStatus('Disponível');
+      });
+
+      player.addEventListener('error', () => {
+        reconnectStream('error');
+      });
+
+      player.addEventListener('ended', () => {
+        isPlaying = false;
+        updatePlayIcon();
+        clearTimeout(waitingTimer);
+        clearTimeout(liveTimer);
+        setStatus('Transmissão finalizada');
+      });
+
+      // Reconectar ao voltar online
+      window.addEventListener('online', () => {
+        if (isPlaying) reconnectStream('online');
+      });
+
+      // Monitor passivo: não altera o áudio no funcionamento normal.
+      // Age só em travamento real (sem progresso) ou atraso anormal.
+      setInterval(() => {
+        fixHugeDrift();
+        if (!isPlaying || player.paused) return;
+        if (Date.now() - lastProgressAt > STALL_RELOAD_MS) {
+          lastProgressAt = Date.now();   // evita disparo duplo durante a reconexão
+          reconnectStream('sem-progresso');
+        }
+      }, 5000);
+
+      // Sem controle de volume na página: o som sai em volume cheio e o
+      // ajuste fica por conta do aparelho (igual ao app Android)
+      player.volume = 1.0;
+
+      // Autoplay: a fonia começa a tocar já na abertura da página, mas só com
+      // a aba à vista (igual ao YouTube). Aberta em segundo plano, nada toca
+      // escondido: o primeiro autoplay espera a aba ser acessada.
+      function autoplayFirstVisible() {
+        if (document.visibilityState !== 'visible') return;
+        document.removeEventListener('visibilitychange', autoplayFirstVisible);
+        if (player.paused) startPlayback();
+      }
+
+      if (document.visibilityState === 'hidden') {
+        document.addEventListener('visibilitychange', autoplayFirstVisible);
+      } else {
+        startPlayback();
+      }
+
+      // Voltando pelo histórico (bfcache) o áudio pode voltar pausado
+      window.addEventListener('pageshow', (e) => {
+        if (e.persisted && player.paused && document.visibilityState === 'visible') startPlayback();
+      });
+    });
+
+    // ==========================================
+    // TEMA (verde padrão / vermelho noturno)
+    // ==========================================
+    (function () {
+      const saved = localStorage.getItem('radarTheme');
+      if (saved) document.documentElement.setAttribute('data-theme', saved);
+
+      const btn = document.getElementById('themeToggleBtn');
+      if (saved === 'red') btn.querySelector('.material-icons').textContent = 'brightness_7';
+
+      btn.addEventListener('click', function () {
+        const isRed = document.documentElement.getAttribute('data-theme') === 'red';
+        if (isRed) {
+          document.documentElement.removeAttribute('data-theme');
+          localStorage.removeItem('radarTheme');
+          this.querySelector('.material-icons').textContent = 'brightness_4';
+        } else {
+          document.documentElement.setAttribute('data-theme', 'red');
+          localStorage.setItem('radarTheme', 'red');
+          this.querySelector('.material-icons').textContent = 'brightness_7';
+        }
+      });
+    })();
+
+    // ==========================================
+    // SERVICE WORKER + PWA INSTALL
+    // ==========================================
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => { });
+    }
+
+    let deferredPrompt = null;
+    const installBanner = document.getElementById('installBanner');
+    const installBtn = document.getElementById('installBtn');
+    const installClose = document.getElementById('installClose');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!localStorage.getItem('pwaInstallDismissed')) {
+        installBanner.classList.add('visible');
+      }
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBanner.classList.remove('visible');
+    });
+
+    installClose.addEventListener('click', () => {
+      installBanner.classList.remove('visible');
+      localStorage.setItem('pwaInstallDismissed', '1');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installBanner.classList.remove('visible');
+      deferredPrompt = null;
+    });
+  </script>
+
+  <!-- Sobre: abre e fecha o diálogo de informações -->
+  <script>
+    (function () {
+      const dialog = document.getElementById('infoDialog');
+      const openBtn = document.getElementById('infoBtn');
+      if (!dialog || !openBtn) return;
+
+      function close() {
+        if (dialog.open) dialog.close();
+      }
+
+      openBtn.addEventListener('click', function () {
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.setAttribute('open', '');   // navegadores muito antigos
+      });
+
+      ['infoCloseBtn'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', close);
+      });
+
+      // Clicar no fundo escurecido (fora do painel) também fecha
+      dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) close();
+      });
+    })();
+  </script>
+
+  <!-- Métricas do player (GA4): play, tempo de escuta, buffering, erros -->
+  <script src="/radio-analytics.js"></script>
+</body>
+
+</html>
