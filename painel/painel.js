@@ -1120,14 +1120,17 @@
     if (lvl) textRight(W, 22, lvl, C.cyan);
 
     text(0, 30, truncate(d.model || 'TYPE ?', 21), C.dimText);
-    text(0, 39, 'DEP ' + clockOf(d.depMs), C.amber);
-    textRight(W, 39, 'ETA ' + clockOf(d.etaMs), C.white);
-    /* ultima linha: distancia a esquerda, UTC (e posicao na rodada) a direita */
+
+    /* DEP e ETA lado a lado; UTC (e posicao na rodada) fecha a linha */
     var rodape = (state.screens.length > 1
       ? (state.screenIndex + 1) + '/' + state.screens.length + ' '
       : '') + 'UTC';
-    text(0, 48, truncateToWidth(distLine(d), W - textWidth(rodape, 1) - 3), C.green);
-    textRight(W, 48, rodape, C.dimText);
+    var dep = 'DEP ' + clockOf(d.depMs);
+    text(0, 39, dep, C.amber);
+    text(textWidth(dep, 1) + 7, 39, 'ETA ' + clockOf(d.etaMs), C.white);
+    textRight(W, 39, rodape, C.dimText);
+
+    text(0, 48, truncate(distLine(d), 21), C.green);
   }
 
   function drawEmpty() {
