@@ -4,6 +4,9 @@
 # Plans (internal docs)
 plans/
 
+# Documentation (internal docs)
+docs/
+
 # User-specific files
 *.rsuser
 *.suo

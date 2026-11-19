@@ -1,11 +1,15 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v9';
+const CACHE_NAME = 'sbfi-atc-v12';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
 const STATIC_RESOURCES = [
   '/',
   '/index.html',
+  // Painel oculto de chegadas/partidas (OpenSky) — só por link direto, sem link no site
+  '/painel/',
+  '/painel/painel.css',
+  '/painel/painel.js',
   '/radio-analytics.js',
   '/radio-recorder.js',
   '/radio-waveform.js',
@@ -26,6 +30,10 @@ const CDN_CACHE_ORIGINS = [
 // URLs que NUNCA devem ser cacheadas
 function isNoCacheUrl(url) {
   return url.includes('ic.io.tec.br') ||
+         url.includes('opensky-network.org') ||
+         url.includes('/api/') ||
+         url.includes('localhost') ||
+         url.includes('127.0.0.1') ||
          url.includes('googletagmanager.com') ||
          url.includes('google-analytics.com');
 }
