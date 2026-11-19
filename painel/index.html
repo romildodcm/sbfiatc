@@ -1,129 +1,14 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-
-  <link rel="preconnect" href="https://opensky-network.org" crossorigin>
-  <link rel="preconnect" href="https://auth.opensky-network.org" crossorigin>
-
-  <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
-  <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
-  <link rel="manifest" href="/favicon/site.webmanifest">
-
-  <!-- Página oculta: sem link em qualquer lugar do site e fora dos buscadores -->
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="description" content="LED board of arrivals and departures — ADS-B data from the OpenSky Network.">
-  <meta name="theme-color" content="#000000">
-
-  <link rel="stylesheet" href="/painel/painel.css?v=5">
-
+  <link rel="canonical" href="/painel.html">
+  <meta http-equiv="refresh" content="0; url=/painel.html">
   <title>Arrivals and departures</title>
 </head>
-
 <body>
-
-  <main class="stage">
-    <!-- ============ PAINEL FÍSICO 320 × 160 mm (P2.5 = 128 × 64 LED) ============ -->
-    <div class="panel" id="panel" role="img" aria-label="LED board of arrivals and departures">
-      <div class="panel-inner">
-        <div class="boot" id="boot">booting</div>
-        <canvas id="glow" class="cv glow" width="128" height="64" aria-hidden="true"></canvas>
-        <canvas id="led" class="cv" width="128" height="64"></canvas>
-        <span class="mask" aria-hidden="true"></span>
-        <span class="glass" aria-hidden="true"></span>
-      </div>
-    </div>
-  </main>
-
-  <!-- ============ CONTROLES (canto inferior direito) ============ -->
-  <div class="dock">
-    <span class="dock-status" id="dockStatus" hidden>
-      <span class="dock-label" id="recordLabel"></span>
-      <span class="dock-counter" id="recordCounter"></span>
-    </span>
-
-    <button class="rbtn" id="playBtn" type="button" aria-label="Listen to live ATC audio" aria-pressed="false">
-      <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M8 5.5v13l11-6.5z" fill="currentColor" />
-      </svg>
-      <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor" />
-        <rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor" />
-      </svg>
-    </button>
-
-    <button class="rbtn rec" id="recordBtn" type="button"
-            data-label-idle="" data-label-recording="REC"
-            data-aria-idle="Record ATC audio (MP3)"
-            data-aria-recording="Stop recording and download the MP3"
-            aria-label="Record ATC audio (MP3)">
-      <span class="rec-dot" aria-hidden="true"></span>
-    </button>
-
-    <button class="rbtn" id="btnCfg" type="button" aria-label="OpenSky API settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round">
-        <path d="M4 7h16M4 12h16M4 17h16" />
-        <circle cx="9" cy="7" r="2.2" fill="#0b0b0c" />
-        <circle cx="15" cy="12" r="2.2" fill="#0b0b0c" />
-        <circle cx="8" cy="17" r="2.2" fill="#0b0b0c" />
-      </svg>
-    </button>
-  </div>
-
-  <!-- stream da fonia: o /radio-recorder.js usa este player para o pré-roll -->
-  <audio id="radioPlayer" preload="none" crossorigin="anonymous"></audio>
-
-  <!-- ============ AJUSTES: chave da OpenSky ============ -->
-  <div class="overlay" id="cfg" hidden>
-    <form class="cfg" id="cfgForm" autocomplete="off" role="dialog" aria-modal="true"
-          aria-label="OpenSky API settings">
-      <div class="cfg-title">API · AirGateway</div>
-
-      <p class="cfg-note">
-        The panel reads traffic from your .NET API, which polls the OpenSky
-        Network every 30 s. Sign in with the API user — credentials stay in
-        this browser only. If the API runs on another port, adjust the address.
-      </p>
-
-      <div class="cfg-grid">
-        <label class="field full">
-          <span>API address</span>
-          <input id="apiBase" type="url" spellcheck="false" autocomplete="off"
-                 placeholder="http://localhost:5164">
-        </label>
-      </div>
-
-      <div class="cfg-grid">
-        <label class="field">
-          <span>email</span>
-          <input id="email" type="email" spellcheck="false" autocomplete="username"
-                 placeholder="you@example.com">
-        </label>
-        <label class="field">
-          <span>password</span>
-          <input id="password" type="password" spellcheck="false" autocomplete="current-password"
-                 placeholder="password">
-        </label>
-      </div>
-
-      <div class="cfg-actions">
-        <button class="btn primary" type="submit">sign in</button>
-        <button class="btn" type="button" id="btnClearKey">clear</button>
-        <button class="btn" type="button" id="btnCloseCfg">close</button>
-      </div>
-
-      <div class="cfg-status" id="cfgStatus">—</div>
-      <div class="cfg-alert" id="alertBox" role="status" aria-live="polite"></div>
-    </form>
-  </div>
-
-  <script src="/radio-recorder.js" defer></script>
-  <script src="/painel/painel.js?v=5" defer></script>
+  <p><a href="/painel.html">Open the arrivals and departures board</a></p>
+  <script>location.replace('/painel.html' + location.search);</script>
 </body>
-
 </html>

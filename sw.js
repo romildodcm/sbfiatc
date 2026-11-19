@@ -1,5 +1,5 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v13';
+const CACHE_NAME = 'sbfi-atc-v14';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
@@ -7,6 +7,7 @@ const STATIC_RESOURCES = [
   '/',
   '/index.html',
   // Painel oculto de chegadas/partidas (OpenSky) — só por link direto, sem link no site
+  '/painel.html',
   '/painel/',
   '/painel/painel.css',
   '/painel/painel.js',
