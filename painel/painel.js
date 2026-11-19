@@ -311,6 +311,13 @@
     return s.toUpperCase();
   }
 
+  /* corta a string para caber em maxPx, sem quebrar no meio de nada */
+  function truncateToWidth(str, maxPx) {
+    var s = normalizeText(str);
+    while (s.length > 1 && textWidth(s, 1) > maxPx) s = s.slice(0, -1);
+    return s;
+  }
+
   function truncate(str, n) {
     var s = normalizeText(str);
     return s.length > n ? s.slice(0, n) : s;
@@ -1105,20 +1112,22 @@
     var org = d.origin ? codeOf(d.origin) : '';
     var dst = d.destination ? codeOf(d.destination) : '';
     var rota = (org ? org + ' ' : '') + '-> ' + (dst || '?');
-    text(tx, 22, truncate(rota, folga), C.cyan);
+
+    /* nível de voo fecha a linha da rota, alinhado à direita */
+    var lvl = levelOf(d);
+    var lvlW = lvl ? textWidth(lvl, 1) : 0;
+    text(tx, 22, truncateToWidth(rota, W - tx - lvlW - 2), C.cyan);
+    if (lvl) textRight(W, 22, lvl, C.cyan);
 
     text(0, 30, truncate(d.model || 'TYPE ?', 21), C.dimText);
     text(0, 39, 'DEP ' + clockOf(d.depMs), C.amber);
     textRight(W, 39, 'ETA ' + clockOf(d.etaMs), C.white);
-    /* distancia a esquerda, nivel de voo a direita (mesma linha) */
-    var lvl = levelOf(d);
-    text(0, 48, truncate(distLine(d), lvl ? 14 : 21), C.green);
-    if (lvl) textRight(W, 48, lvl, C.cyan);
-
-    /* rodapé discreto: fuso e posição na rodada */
-    textRight(W, 56, (state.screens.length > 1
+    /* ultima linha: distancia a esquerda, UTC (e posicao na rodada) a direita */
+    var rodape = (state.screens.length > 1
       ? (state.screenIndex + 1) + '/' + state.screens.length + ' '
-      : '') + 'UTC', C.dimText);
+      : '') + 'UTC';
+    text(0, 48, truncateToWidth(distLine(d), W - textWidth(rodape, 1) - 3), C.green);
+    textRight(W, 48, rodape, C.dimText);
   }
 
   function drawEmpty() {
