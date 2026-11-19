@@ -60,10 +60,9 @@
   var ENRICH_PER_CYCLE = 4;
   var ENRICH_SESSION_CAP = 120;
 
-  /* cobertura do painel: os três aeroportos da tríplice fronteira.
-     AREA_TAG (sem espaços) é a versão que cabe no rodapé ao lado de UTC. */
+  /* cobertura do painel: os três aeroportos da tríplice fronteira
+     (só nas telas sem voo; a tela de voo usa o rodapé para fuso e rodada) */
   var AREA_LABEL = 'IGU / IGR / AGT';
-  var AREA_TAG = 'IGU/IGR/AGT';
 
   var AIRLINES = {
     GLO: { name: 'GOL', iata: 'G3' },
@@ -1116,8 +1115,7 @@
     text(0, 48, truncate(distLine(d), lvl ? 14 : 21), C.green);
     if (lvl) textRight(W, 48, lvl, C.cyan);
 
-    /* rodapé discreto: área coberta, fuso e posição na rodada */
-    text(0, 56, AREA_TAG, C.dimText);
+    /* rodapé discreto: fuso e posição na rodada */
     textRight(W, 56, (state.screens.length > 1
       ? (state.screenIndex + 1) + '/' + state.screens.length + ' '
       : '') + 'UTC', C.dimText);
