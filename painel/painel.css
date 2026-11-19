@@ -266,20 +266,10 @@ body {
   margin-bottom: 16px;
 }
 
-.cfg-note {
-  font-size: 10.5px;
-  line-height: 1.7;
-  letter-spacing: 0.4px;
-  color: #7b7568;
-  margin-bottom: 16px;
-}
-
 .field.full { grid-column: 1 / -1; }
 
-.cfg-note code {
-  font-family: inherit;
-  color: var(--amber);
-}
+/* espaco entre os blocos de campo (endereco / credenciais) */
+.cfg-grid + .cfg-grid { margin-top: 16px; }
 
 .overlay .cfg { width: min(660px, 100%); }
 
@@ -365,6 +355,7 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 20px;
 }
 
 .btn {
@@ -457,3 +448,90 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rbtn, .rbtn.recording, .btn { transition: none; animation: none; }
 }
+
+/* ========== AJUDA E CREDITOS ========== */
+.cfg-help-block {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.cfg-help-title {
+  font-size: 9px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 8px;
+}
+
+.cfg-help {
+  margin: 10px 0 0;
+  padding: 0 0 0 2px;
+  list-style-position: inside;
+  font-size: 10px;
+  line-height: 1.9;
+  letter-spacing: 0.3px;
+  color: #7b7568;
+}
+
+.cfg-help li { margin-bottom: 2px; }
+
+.cfg-help b {
+  color: var(--ink-dim);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.cfg-credit {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: #4a463f;
+}
+
+.cfg-credit a {
+  color: var(--amber);
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(255, 176, 32, 0.4);
+}
+
+.cfg-credit a:hover { border-bottom-style: solid; }
+
+/* ========== CAMPO DE SENHA COM OLHO ========== */
+.pw {
+  position: relative;
+  display: block;
+}
+
+.pw input { padding-right: 34px; }
+
+.pw-eye {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #55504a;
+  cursor: pointer;
+}
+
+.pw-eye:hover { color: var(--ink-dim); background: rgba(255, 255, 255, 0.04); }
+.pw-eye:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px; }
+.pw-eye svg { width: 15px; height: 15px; }
+
+/* o icone do "olho riscado" so aparece quando a senha esta visivel */
+.pw-eye .i-eye-off { display: none; }
+.pw-eye.on .i-eye { display: none; }
+.pw-eye.on .i-eye-off { display: block; }
+.pw-eye.on { color: var(--amber); }
