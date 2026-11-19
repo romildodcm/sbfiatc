@@ -184,7 +184,7 @@
     apiBase: $('apiBase'), email: $('email'), password: $('password'),
     btnClearKey: $('btnClearKey'),
     btnCloseCfg: $('btnCloseCfg'),
-    playBtn: $('playBtn'), player: $('radioPlayer'),
+    playBtn: $('playBtn'), player: $('radioPlayer'), btnFull: $('btnFull'),
     dockStatus: $('dockStatus'), recordLabel: $('recordLabel'), recordCounter: $('recordCounter')
   };
 
@@ -1347,6 +1347,42 @@
         el.password.setSelectionRange(el.password.value.length, el.password.value.length);
       } catch (e) { }
     });
+  }
+
+  /* tela cheia: o iPad/Safari antigo usa webkit; sem suporte, o botao some */
+  function fullElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function syncFull() {
+    if (!el.btnFull) return;
+    var ativo = !!fullElement();
+    el.btnFull.classList.toggle('on', ativo);
+    el.btnFull.setAttribute('aria-pressed', String(ativo));
+    el.btnFull.setAttribute('aria-label', ativo ? 'sair da tela cheia' : 'tela cheia');
+    fit();
+  }
+
+  if (el.btnFull) {
+    var alvo = document.documentElement;
+    var pode = !!(alvo.requestFullscreen || alvo.webkitRequestFullscreen);
+
+    if (!pode) {
+      el.btnFull.hidden = true;
+    } else {
+      el.btnFull.addEventListener('click', function () {
+        try {
+          if (fullElement()) {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          } else {
+            (alvo.requestFullscreen || alvo.webkitRequestFullscreen).call(alvo);
+          }
+        } catch (e) { }
+      });
+
+      document.addEventListener('fullscreenchange', syncFull);
+      document.addEventListener('webkitfullscreenchange', syncFull);
+    }
   }
 
   el.btnCfg.addEventListener('click', openCfg);
