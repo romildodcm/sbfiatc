@@ -1,5 +1,5 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v17';
+const CACHE_NAME = 'sbfi-atc-v18';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
@@ -45,6 +45,13 @@ function isCdnUrl(url) {
   return CDN_CACHE_ORIGINS.some(origin => url.startsWith(origin));
 }
 
+// Código do site: sempre da rede primeiro, para a atualização valer na hora
+function isCodeUrl(request) {
+  if (request.destination === 'document') return true;
+  const path = new URL(request.url).pathname;
+  return /\.(js|css|html)$/i.test(path) || /\/$/.test(path);
+}
+
 // Instalação do Service Worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -81,7 +88,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Recursos locais: stale-while-revalidate (retorna cache, atualiza em background)
+  // Código (HTML, JS, CSS): rede primeiro. O stale-while-revalidate antigo
+  // servia a versão anterior do painel.js a cada carga — a correção só
+  // aparecia no navegador depois de duas visitas com o SW atualizado.
+  // A cópia em cache fica só como reserva quando não há rede.
+  if (isCodeUrl(event.request)) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Demais recursos locais: stale-while-revalidate, para funcionar offline
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetchPromise = fetch(event.request).then(response => {

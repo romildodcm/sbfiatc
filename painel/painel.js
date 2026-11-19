@@ -60,10 +60,9 @@
   var ENRICH_PER_CYCLE = 4;
   var ENRICH_SESSION_CAP = 120;
 
-  /* cobertura do painel: os três aeroportos da tríplice fronteira.
-     AREA_TAG (sem espaços) é a versão que cabe no rodapé ao lado de UTC. */
+  /* cobertura do painel: os três aeroportos da tríplice fronteira
+     (só nas telas sem voo; a tela de voo usa o rodapé para fuso e rodada) */
   var AREA_LABEL = 'IGU / IGR / AGT';
-  var AREA_TAG = 'IGU/IGR/AGT';
 
   var AIRLINES = {
     GLO: { name: 'GOL', iata: 'G3' },
@@ -265,26 +264,35 @@
     }
   }
 
+  /* avanco por caractere: o glifo ocupa 5 colunas + 1 de respiro. O espaco
+     tem glifo vazio, entao avanca menos — 4 colunas em vez de 6 — e a
+     distancia entre palavras dobra de valor util sem inventar kerning. */
+  function advanceOf(ch) { return ch === ' ' ? 4 : 6; }
+
   function text(x, y, str, c, scale) {
     scale = scale || 1;
     var s = normalizeText(str);
     var cx = x;
     for (var i = 0; i < s.length; i++) {
-      var g = GLYPHS[s.charAt(i)] || GLYPHS['?'];
+      var ch = s.charAt(i);
+      var g = GLYPHS[ch] || GLYPHS['?'];
       for (var row = 0; row < 7; row++) {
         for (var col = 0; col < 5; col++) {
           if (!g[row][col]) continue;
           rect(cx + col * scale, y + row * scale, scale, scale, c);
         }
       }
-      cx += 6 * scale;
+      cx += advanceOf(ch) * scale;
     }
     return cx - x - scale;
   }
 
   function textWidth(str, scale) {
     scale = scale || 1;
-    return String(str).length * 6 * scale - scale;
+    var s = String(str);
+    var w = 0;
+    for (var i = 0; i < s.length; i++) w += advanceOf(s.charAt(i));
+    return w * scale - scale;
   }
 
   function textRight(xEnd, y, str, c, scale) {
@@ -301,6 +309,13 @@
     var s = String(str == null ? '' : str);
     if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     return s.toUpperCase();
+  }
+
+  /* corta a string para caber em maxPx, sem quebrar no meio de nada */
+  function truncateToWidth(str, maxPx) {
+    var s = normalizeText(str);
+    while (s.length > 1 && textWidth(s, 1) > maxPx) s = s.slice(0, -1);
+    return s;
   }
 
   function truncate(str, n) {
@@ -1058,30 +1073,31 @@
                     ORG -> DST
        MODELO
        DEP hh:mm              ETA hh:mm
-       FALTAM xx KM
-       IGU/IGR/AGT            n/m UTC
+       15 KM TO GO            n/m
   */
   function drawFlight(d) {
     var logoPx = ensureLogo(d.airline, function () { draw(); });
 
     /* o espaço do logo é sempre reservado, para o texto não pular de lugar
-       entre um voo e outro */
+       entre um voo e outro. A logo desce 1 LED para ficar centrada no bloco
+       das 3 primeiras linhas (companhia 0..6, voo 9..15, rota 23..29). */
+    var logoY = 1;
     if (logoPx) {
       for (var y = 0; y < LOGO_H; y++) {
         for (var x = 0; x < LOGO_W; x++) {
-          px(x, y, logoPx[y * LOGO_W + x]);
+          px(x, y + logoY, logoPx[y * LOGO_W + x]);
         }
       }
     } else {
       var col = d.airline.color;
       for (var i = 0; i < LOGO_W; i++) {
-        px(i, 0, col); px(i, LOGO_H - 1, col);
+        px(i, logoY, col); px(i, logoY + LOGO_H - 1, col);
       }
       for (var j = 0; j < LOGO_H; j++) {
-        px(0, j, col); px(LOGO_W - 1, j, col);
+        px(0, j + logoY, col); px(LOGO_W - 1, j + logoY, col);
       }
       var sigla = (d.airline.iata || d.airline.code || '?').slice(0, 3);
-      text(Math.round((LOGO_W - textWidth(sigla, 1)) / 2), 10, sigla, C.white);
+      text(Math.round((LOGO_W - textWidth(sigla, 1)) / 2), logoY + 10, sigla, C.white);
     }
 
     var tx = LOGO_W + 4;
@@ -1090,28 +1106,38 @@
     text(tx, 0, truncate(airlineName(d), folga), C.white);
     text(tx, 9, truncate(d.flight, folga), C.white);
 
-    /* linha verde dividindo o cabeçalho (companhia + voo) da rota */
-    for (var k = tx; k < W; k++) px(k, 17, C.green);
+    /* linha verde dividindo o cabeçalho (companhia + voo) da rota: fica no
+       meio do vão livre (3 LED acima, 3 abaixo) — no 17 ela encostava no voo */
+    for (var k = tx; k < W; k++) px(k, 19, C.green);
 
     /* origem/destino desconhecidos aparecem só de um lado da seta */
     var org = d.origin ? codeOf(d.origin) : '';
     var dst = d.destination ? codeOf(d.destination) : '';
     var rota = (org ? org + ' ' : '') + '-> ' + (dst || '?');
-    text(tx, 22, truncate(rota, folga), C.cyan);
 
-    text(0, 30, truncate(d.model || 'TYPE ?', 21), C.dimText);
-    text(0, 39, 'DEP ' + clockOf(d.depMs), C.amber);
-    textRight(W, 39, 'ETA ' + clockOf(d.etaMs), C.white);
-    /* distancia a esquerda, nivel de voo a direita (mesma linha) */
+    /* nível de voo fecha a linha da rota, alinhado à direita */
     var lvl = levelOf(d);
-    text(0, 48, truncate(distLine(d), lvl ? 14 : 21), C.green);
-    if (lvl) textRight(W, 48, lvl, C.cyan);
+    var lvlW = lvl ? textWidth(lvl, 1) : 0;
+    text(tx, 23, truncateToWidth(rota, W - tx - lvlW - 2), C.cyan);
+    if (lvl) textRight(W, 23, lvl, C.cyan);
 
-    /* rodapé discreto: área coberta, fuso e posição na rodada */
-    text(0, 56, AREA_TAG, C.dimText);
-    textRight(W, 56, (state.screens.length > 1
-      ? (state.screenIndex + 1) + '/' + state.screens.length + ' '
-      : '') + 'UTC', C.dimText);
+    /* da rota para baixo, espacamento uniforme de 4 LEDs entre as linhas:
+       rota 23..29, modelo 34..40, DEP/ETA 45..51, distancia 56..62 */
+    text(0, 34, truncate(d.model || 'TYPE ?', 21), C.dimText);
+
+    /* DEP e ETA lado a lado (os horários já são UTC) */
+    var dep = 'DEP ' + clockOf(d.depMs);
+    text(0, 45, dep, C.amber);
+    text(textWidth(dep, 1) + 7, 45, 'ETA ' + clockOf(d.etaMs), C.white);
+
+    /* ultima linha: distancia a esquerda, posicao na rodada a direita.
+       Sem contador, a distancia usa a linha inteira: o limite é em pixels
+       (truncateToWidth), nao em caracteres. */
+    var pos = state.screens.length > 1
+      ? (state.screenIndex + 1) + '/' + state.screens.length
+      : '';
+    text(0, 56, truncateToWidth(distLine(d), pos ? W - textWidth(pos, 1) - 3 : W - 3), C.green);
+    if (pos) textRight(W, 56, pos, C.dimText);
   }
 
   function drawEmpty() {
