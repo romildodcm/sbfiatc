@@ -535,3 +535,13 @@ body {
 .pw-eye.on .i-eye { display: none; }
 .pw-eye.on .i-eye-off { display: block; }
 .pw-eye.on { color: var(--amber); }
+
+/* ========== TELA CHEIA ========== */
+#btnFull .i-exit { display: none; }
+#btnFull.on .i-full { display: none; }
+#btnFull.on .i-exit { display: block; }
+#btnFull.on { color: var(--amber); }
+
+/* em tela cheia o fundo preto cobre a tela toda */
+:fullscreen { background: #000; }
+:fullscreen .stage { height: 100vh; }
