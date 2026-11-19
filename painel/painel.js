@@ -265,26 +265,35 @@
     }
   }
 
+  /* avanco por caractere: o glifo ocupa 5 colunas + 1 de respiro. O espaco
+     tem glifo vazio, entao avanca menos — 4 colunas em vez de 6 — e a
+     distancia entre palavras dobra de valor util sem inventar kerning. */
+  function advanceOf(ch) { return ch === ' ' ? 4 : 6; }
+
   function text(x, y, str, c, scale) {
     scale = scale || 1;
     var s = normalizeText(str);
     var cx = x;
     for (var i = 0; i < s.length; i++) {
-      var g = GLYPHS[s.charAt(i)] || GLYPHS['?'];
+      var ch = s.charAt(i);
+      var g = GLYPHS[ch] || GLYPHS['?'];
       for (var row = 0; row < 7; row++) {
         for (var col = 0; col < 5; col++) {
           if (!g[row][col]) continue;
           rect(cx + col * scale, y + row * scale, scale, scale, c);
         }
       }
-      cx += 6 * scale;
+      cx += advanceOf(ch) * scale;
     }
     return cx - x - scale;
   }
 
   function textWidth(str, scale) {
     scale = scale || 1;
-    return String(str).length * 6 * scale - scale;
+    var s = String(str);
+    var w = 0;
+    for (var i = 0; i < s.length; i++) w += advanceOf(s.charAt(i));
+    return w * scale - scale;
   }
 
   function textRight(xEnd, y, str, c, scale) {
