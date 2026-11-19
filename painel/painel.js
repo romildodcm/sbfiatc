@@ -1084,7 +1084,7 @@
       text(Math.round((LOGO_W - textWidth(sigla, 1)) / 2), 10, sigla, C.white);
     }
 
-    var tx = LOGO_W + 4;
+    var tx = LOGO_W + 2;
     var folga = 15;
 
     text(tx, 0, truncate(airlineName(d), folga), C.white);
