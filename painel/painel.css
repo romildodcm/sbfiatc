@@ -1,0 +1,459 @@
+/* ==========================================================================
+   /painel — página preta com um painel de LED físico no meio.
+   Painel de 320 × 160 mm em P2.5 => 128 × 64 LEDs RGB.
+   O conteúdo é desenhado pixel a pixel em <canvas> (1 pixel = 1 LED);
+   a máscara dá o formato de cada LED e a camada borrada faz o brilho.
+
+   Página secundária e oculta: não é linkada em lugar nenhum do site.
+   ========================================================================== */
+
+:root {
+  --cell: 6px;             /* tamanho de cada LED na tela (definido no JS) */
+  --bezel: 16px;           /* espessura da moldura do painel */
+
+  --ink: #d9d4c8;
+  --ink-dim: #7b7568;
+  --line: #22201c;
+  --amber: #ffb14d;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: #000;
+  color: var(--ink);
+  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ========== PALCO ========== */
+.stage {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 18px 12px;
+  background: #000;
+}
+
+/* ========== PAINEL FÍSICO ========== */
+.panel {
+  padding: var(--bezel);
+  border-radius: 12px;
+  background: linear-gradient(175deg, #1c1c1d 0%, #0d0d0e 55%, #08080a 100%);
+  box-shadow:
+    inset 0 0 0 1px #2a2a2d,
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 0 #000,
+    0 26px 70px rgba(0, 0, 0, 0.95);
+  position: relative;
+}
+
+/* parafusos, para parecer um módulo de LED de verdade */
+.panel::before,
+.panel::after {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #4a4a4e, #17171a 70%);
+  top: 6px;
+}
+.panel::before { left: 6px; }
+.panel::after { right: 6px; }
+
+.panel-inner {
+  position: relative;
+  width: calc(var(--cell) * 128);
+  height: calc(var(--cell) * 64);
+  background: #030303;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: inset 0 0 22px #000, inset 0 0 2px #000;
+}
+
+.boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255, 177, 77, 0.55);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cv {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* brilho dos LEDs acesos */
+.glow {
+  filter: blur(5px) saturate(1.5);
+  opacity: 0.55;
+  transform: scale(1.01);
+}
+
+/* máscara: cada célula vira um ponto redondo com a moldura preta entre eles */
+.mask {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background-image: radial-gradient(circle at 50% 50%,
+      transparent 0 30%, #000 44%);
+  background-size: var(--cell) var(--cell);
+  background-repeat: repeat;
+  pointer-events: none;
+}
+
+/* reflexo do acrílico */
+.glass {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  background:
+    linear-gradient(158deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.015) 26%, transparent 45%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.35), transparent 30%);
+  pointer-events: none;
+}
+
+/* ========== CONTROLES (canto inferior direito) ========== */
+.dock {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rbtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #0b0b0c;
+  border: 1px solid #232326;
+  color: rgba(255, 177, 77, 0.75);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s, transform 0.1s;
+}
+
+.rbtn:hover { opacity: 1; }
+
+.rbtn:hover {
+  border-color: rgba(255, 177, 77, 0.45);
+  box-shadow: 0 0 10px rgba(255, 177, 77, 0.12);
+}
+
+.rbtn:active { transform: scale(0.96); }
+
+.rbtn:focus-visible {
+  outline: 1px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.rbtn svg { width: 13px; height: 13px; display: block; }
+
+/* play/pause */
+.rbtn .i-pause { display: none; }
+.rbtn.playing .i-play { display: none; }
+.rbtn.playing .i-pause { display: block; }
+.rbtn.playing { color: #ffe0ae; border-color: rgba(255, 177, 77, 0.5); }
+
+/* gravar */
+.rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff4b3e;
+  box-shadow: 0 0 7px rgba(255, 75, 62, 0.5);
+  transition: background 0.15s;
+}
+
+.rbtn.recording {
+  border-color: #ff6a5a;
+  animation: recPulse 1.4s ease-in-out infinite;
+}
+
+.rbtn.recording .rec-dot {
+  background: #ff2d1a;
+  box-shadow: 0 0 16px rgba(255, 45, 26, 0.9);
+}
+
+@keyframes recPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 75, 62, 0); }
+  50% { box-shadow: 0 0 18px rgba(255, 75, 62, 0.35); }
+}
+
+/* tempo de gravação, ao lado dos botões */
+.dock-status {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(11, 11, 12, 0.9);
+  border: 1px solid #232326;
+  font-family: var(--mono, monospace);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.dock-status[hidden] { display: none; }
+.dock-label { text-transform: uppercase; }
+.dock-counter { color: #ffe0ae; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 520px) {
+  .dock { right: 10px; bottom: 10px; gap: 6px; }
+  .rbtn { width: 28px; height: 28px; }
+  .rbtn svg { width: 12px; height: 12px; }
+  .dock-status { display: none; }
+}
+
+/* ========== OVERLAY DE AJUSTES ========== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(3px);
+}
+
+.overlay[hidden] { display: none; }
+
+.cfg {
+  width: min(640px, 100%);
+  max-height: 88vh;
+  overflow: auto;
+  background: #0b0b0c;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 22px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+  font-size: 12px;
+}
+
+.cfg-title {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 16px;
+}
+
+.cfg-note {
+  font-size: 10.5px;
+  line-height: 1.7;
+  letter-spacing: 0.4px;
+  color: #7b7568;
+  margin-bottom: 16px;
+}
+
+.field.full { grid-column: 1 / -1; }
+
+.cfg-note code {
+  font-family: inherit;
+  color: var(--amber);
+}
+
+.overlay .cfg { width: min(660px, 100%); }
+
+.cfg-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.field span {
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.field input,
+.field select {
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+  background: #050506;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  width: 100%;
+  min-width: 0;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  appearance: none;
+}
+
+.field select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%),
+                    linear-gradient(135deg, var(--ink-dim) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px rgba(255, 177, 77, 0.12);
+}
+
+.field input[type="number"] { -moz-appearance: textfield; }
+.field input[type="number"]::-webkit-outer-spin-button,
+.field input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.field input::placeholder { color: #3a3733; }
+
+.presets {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+
+.chip {
+  font-family: inherit;
+  font-size: 9.5px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.chip:hover { color: var(--amber); border-color: #3a3630; }
+
+.cfg-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 9.5px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: #3a3630; background: rgba(255, 255, 255, 0.03); }
+
+.btn.primary {
+  background: var(--amber);
+  color: #171002;
+  border-color: var(--amber);
+  font-weight: 700;
+}
+
+.cfg-adv {
+  margin-top: 16px;
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+}
+
+.cfg-adv summary {
+  font-size: 9px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  cursor: pointer;
+  list-style: none;
+}
+
+.cfg-adv summary::-webkit-details-marker { display: none; }
+.cfg-adv summary::before { content: "▸ "; }
+.cfg-adv[open] summary::before { content: "▾ "; }
+
+.cfg-adv .cfg-grid { margin-top: 10px; }
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.check input { accent-color: var(--amber); width: 14px; height: 14px; }
+
+.cfg-status {
+  white-space: pre-line;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 9.5px;
+  line-height: 1.9;
+  letter-spacing: 0.6px;
+  color: #55504a;
+}
+
+.cfg-alert {
+  display: none;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #7a2b23;
+  border-radius: 6px;
+  color: #ff8a7a;
+  background: rgba(255, 91, 74, 0.07);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.cfg-alert.show { display: block; }
+
+/* ========== RESPONSIVO ========== */
+@media (max-width: 520px) {
+  :root { --bezel: 10px; }
+  .stage { gap: 12px; padding: 10px 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rbtn, .rbtn.recording, .btn { transition: none; animation: none; }
+}
