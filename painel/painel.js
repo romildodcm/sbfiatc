@@ -50,7 +50,6 @@
   /* ------------------------------------------------------------------ */
 
   var DEFAULT_API = 'http://localhost:5164';   // AirGateway.Api
-  var CREDIT_CAP_ANON = 400;
 
   var ROUTE_API = 'https://api.adsbdb.com/v0';
   var LOGO_LOCAL = '/airlines/';               // AirGateway.Api (wwwroot/airlines)
@@ -60,13 +59,6 @@
   var CACHE_CAP = 400;
   var ENRICH_PER_CYCLE = 4;
   var ENRICH_SESSION_CAP = 120;
-
-  var PRESETS = [
-    { name: 'SBFI', label: 'Foz do Iguaçu', lat: -25.5977, lon: -54.4872 },
-    { name: 'SGES', label: 'Guaraní', lat: -25.4546, lon: -54.8436 },
-    { name: 'SARI', label: 'Iguazú', lat: -25.7373, lon: -54.4735 },
-    { name: 'TRÍPLICE', label: 'Tríplice fronteira', lat: -25.6900, lon: -54.4400 }
-  ];
 
   /* cobertura do painel: os três aeroportos da tríplice fronteira.
      AREA_TAG (sem espaços) é a versão que cabe no rodapé ao lado de UTC. */
@@ -192,7 +184,7 @@
     apiBase: $('apiBase'), email: $('email'), password: $('password'),
     btnClearKey: $('btnClearKey'),
     btnCloseCfg: $('btnCloseCfg'),
-    playBtn: $('playBtn'), recordBtn: $('recordBtn'), player: $('radioPlayer'),
+    playBtn: $('playBtn'), player: $('radioPlayer'),
     dockStatus: $('dockStatus'), recordLabel: $('recordLabel'), recordCounter: $('recordCounter')
   };
 
@@ -211,9 +203,7 @@
     /* centro fixo: SBFI (aeroporto de Foz do Iguaçu) */
     lat: -25.593485,
     lon: -54.490306,
-    radius: 150,
     interval: 60,
-    enrich: true,
 
     apiBase: DEFAULT_API,
     email: '',
@@ -229,7 +219,6 @@
     centerName: 'SBFI',
 
     aircraft: [],
-    prev: new Map(),
     depSeen: new Map(),
     routes: {},
     acinfo: {},
@@ -237,13 +226,9 @@
     adsbOff: false,
 
     lastFetchAt: 0,
-    lastCount: 0,
     nextFetchAt: 0,
-    remaining: null,
-    reqCount: 0,
     inflight: false,
     error: '',
-    keyError: '',
 
     screens: [],
     screenIndex: 0,
@@ -311,10 +296,6 @@
     text(Math.max(0, Math.round((W - textWidth(s, scale)) / 2)), y, s, c, scale);
   }
 
-  function dots(x, y, c) {
-    for (var i = x; i < W; i += 4) { px(i, y, c); px(i + 1, y, c); }
-  }
-
   /* acentos não existem na matriz 5 × 7: viram a letra base */
   function normalizeText(str) {
     var s = String(str == null ? '' : str);
@@ -337,7 +318,6 @@
   /* Dados                                                               */
   /* ------------------------------------------------------------------ */
 
-  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 
   /* horários sempre em UTC (o painel é operacional) */
@@ -415,7 +395,7 @@
   /* e-mail/senha → access token (30 min); renova sozinho quando expira */
   function login() {
     if (!state.email || !state.password) {
-      var sem = new Error('no credentials');
+      var sem = new Error('sem credenciais');
       sem.code = 'nocreds';
       return Promise.reject(sem);
     }
@@ -432,12 +412,12 @@
       body: JSON.stringify({ email: state.email, password: state.password })
     }).then(function (r) {
       if (r.status === 401) {
-        var e1 = new Error('invalid e-mail or password');
+        var e1 = new Error('e-mail ou senha inválidos');
         e1.code = 'auth';
         throw e1;
       }
       if (!r.ok) {
-        var e2 = new Error('login returned HTTP ' + r.status);
+        var e2 = new Error('login respondeu HTTP ' + r.status);
         e2.code = 'http';
         throw e2;
       }
@@ -543,7 +523,7 @@
         /* usuário sem vínculo: descobre o aeroporto e tenta de novo */
         return resolveAirportId().then(function (id) {
           if (!id) {
-            var semAp = new Error('user without an airport');
+            var semAp = new Error('usuário sem aeroporto vinculado');
             semAp.code = 'airport';
             throw semAp;
           }
@@ -551,12 +531,12 @@
         });
       }
       if (r.status === 403) {
-        var e403 = new Error('no access to this airport');
+        var e403 = new Error('sem acesso a este aeroporto');
         e403.code = 'auth';
         throw e403;
       }
       if (!r.ok) {
-        var e = new Error('API returned HTTP ' + r.status);
+        var e = new Error('API respondeu HTTP ' + r.status);
         e.code = 'http';
         throw e;
       }
@@ -657,7 +637,7 @@
   }
 
   function enrich(list) {
-    if (!state.enrich || state.adsbOff) return Promise.resolve();
+    if (state.adsbOff) return Promise.resolve();
     if (state.extraQueries >= ENRICH_SESSION_CAP) return Promise.resolve();
 
     var targets = list.filter(function (a) {
@@ -719,7 +699,6 @@
       state.centerName = airport.icao || state.centerName;
       state.lat = airport.latitude;
       state.lon = airport.longitude;
-      state.radius = airport.radiusKm || state.radius;
     }
 
     var list = json.aircraft || [];
@@ -737,8 +716,6 @@
         track: x.track,
         vrate: x.verticalRateFpm == null ? null : x.verticalRateFpm / 196.8504,
         d: x.distanceKm,
-        stale: false,
-        ddot: null,
         kind: STATUS_KIND[x.status] || 'over',
         status: x.status,
         observedAt: x.observedAt
@@ -762,7 +739,6 @@
       .then(function (json) {
         var now = Date.now();
         state.aircraft = normalizeLive(json);
-        state.lastCount = state.aircraft.length;
         state.lastFetchAt = now;
         state.nextFetchAt = now + state.interval * 1000;
         log('aeronaves:', state.aircraft.length, '· aeroporto', state.centerName);
@@ -780,18 +756,18 @@
         var kind = err && err.code;
 
         if (kind === 'nocreds') {
-          msg = 'Set the API e-mail and password in SETTINGS.';
+          msg = 'Configure e-mail e senha da API em Configurações.';
         } else if (kind === 'airport') {
-          msg = 'This user has no airport assigned — set it in /api/users or use an admin.';
+          msg = 'Este usuário não tem aeroporto vinculado — vincule em /api/users ou use um admin.';
         } else if (kind === 'auth') {
           state.token = '';
           state.tokenExpiresAt = 0;
-          msg = (err && err.message) || 'Login refused by the API.';
+          msg = (err && err.message) || 'Login recusado pela API.';
         } else if (err && err.name === 'TypeError') {
-          msg = 'Could not reach ' + state.apiBase +
-            ' (API down? CORS? check Cors__AllowedOrigins).';
+          msg = 'Não consegui falar com ' + state.apiBase +
+            ' (API parada? CORS? veja Cors__AllowedOrigins).';
         } else {
-          msg = (err && err.message) || 'API request failed.';
+          msg = (err && err.message) || 'Falha ao consultar a API.';
         }
 
         state.errorKind = kind || 'http';
@@ -1049,6 +1025,15 @@
     return n.split(' ')[0];
   }
 
+  /* Nivel de voo: sempre FL, sempre 3 digitos (FL046 em vez de 4600 FT).
+     A altitude vem em metros (normalizeLive), por isso a conversao aqui. */
+  function levelOf(d) {
+    if (d.a.alt == null || d.a.onGround) return '';
+    var fl = Math.round(d.a.alt * 3.28084 / 100);
+    if (fl < 1) return '';
+    return 'FL' + (fl < 100 ? ('00' + fl).slice(-3) : String(fl));
+  }
+
   function kmText(km) {
     if (km == null || !isFinite(km)) return '?';
     return km < 10 ? km.toFixed(1) : String(Math.round(km));
@@ -1117,7 +1102,10 @@
     text(0, 30, truncate(d.model || 'TYPE ?', 21), C.dimText);
     text(0, 39, 'DEP ' + clockOf(d.depMs), C.amber);
     textRight(W, 39, 'ETA ' + clockOf(d.etaMs), C.white);
-    text(0, 48, truncate(distLine(d), 21), C.green);
+    /* distancia a esquerda, nivel de voo a direita (mesma linha) */
+    var lvl = levelOf(d);
+    text(0, 48, truncate(distLine(d), lvl ? 14 : 21), C.green);
+    if (lvl) textRight(W, 48, lvl, C.cyan);
 
     /* rodapé discreto: área coberta, fuso e posição na rodada */
     text(0, 56, AREA_TAG, C.dimText);
@@ -1289,19 +1277,20 @@
     var user = state.user;
     var linhaUser = user
       ? user.email + ' · ' + user.role +
-        (user.airport ? ' · ' + user.airport.icao : ' · no airport')
-      : 'none (sign in with e-mail and password)';
+        (user.airport ? ' · ' + user.airport.icao : ' · sem aeroporto')
+      : 'nenhum (entre com e-mail e senha)';
 
     var expira = state.token && state.tokenExpiresAt > Date.now()
-      ? 'token valid for ' + Math.round((state.tokenExpiresAt - Date.now()) / 60000) + ' min'
-      : 'no token';
+      ? 'token válido por ' + Math.round((state.tokenExpiresAt - Date.now()) / 60000) + ' min'
+      : 'sem token';
 
     el.cfgStatus.textContent =
       'API: ' + state.apiBase + '\n' +
-      'user: ' + linhaUser + '\n' +
-      'station: ' + state.centerName +
-        ' · ' + state.aircraft.length + ' aircraft in last poll\n' +
-      'last poll: ' + (state.lastFetchAt ? hhmmss(new Date(state.lastFetchAt)) + ' UTC' : '—') +
+      'usuário: ' + linhaUser + '\n' +
+      'estação: ' + state.centerName +
+        ' · ' + state.aircraft.length +
+        (state.aircraft.length === 1 ? ' aeronave' : ' aeronaves') + ' na última consulta\n' +
+      'última leitura: ' + (state.lastFetchAt ? hhmmss(new Date(state.lastFetchAt)) + ' UTC' : '—') +
         ' · ' + expira +
       (state.error ? '\n' + state.error : '');
   }
@@ -1314,11 +1303,11 @@
     var senha = el.password.value;
 
     if (!/^https?:\/\//i.test(base)) {
-      setAlert('Invalid API address: use http://localhost:5164');
+      setAlert('Endereço da API inválido: use http://localhost:5164');
       return;
     }
     if (!email || !senha) {
-      setAlert('Enter the API user e-mail and password.');
+      setAlert('Informe e-mail e senha do usuário da API.');
       return;
     }
 
@@ -1339,10 +1328,26 @@
     el.apiBase.value = DEFAULT_API;
     el.email.value = '';
     el.password.value = '';
-    setAlert('Credentials cleared from this browser.');
+    setAlert('Credenciais removidas deste navegador.');
     updateCfgStatus();
     draw();
   });
+
+  /* olho do campo de senha: alterna texto/senha e troca o icone */
+  var btnPw = $('btnTogglePw');
+  if (btnPw) {
+    btnPw.addEventListener('click', function () {
+      var visivel = el.password.type === 'text';
+      el.password.type = visivel ? 'password' : 'text';
+      btnPw.classList.toggle('on', !visivel);
+      btnPw.setAttribute('aria-pressed', String(!visivel));
+      btnPw.setAttribute('aria-label', visivel ? 'mostrar senha' : 'ocultar senha');
+      el.password.focus();
+      try {
+        el.password.setSelectionRange(el.password.value.length, el.password.value.length);
+      } catch (e) { }
+    });
+  }
 
   el.btnCfg.addEventListener('click', openCfg);
   el.btnCloseCfg.addEventListener('click', closeCfg);
@@ -1365,8 +1370,78 @@
     }
   });
 
-  /* clicar no painel adianta o voo da vez */
-  el.panel.addEventListener('click', nextScreen);
+  /* ------------------------------------------------------------------ */
+  /* Copiar a tela atual                                                 */
+  /* ------------------------------------------------------------------ */
+
+  /* texto da tela no formato de strip: uma linha por bloco do painel.
+     Devolve null quando a tela nao e de voo (sem voos, erro, boot). */
+  function screenText() {
+    var s = state.screens[state.screenIndex] || state.screens[0];
+    var hora = hhmmss(new Date()) + ' UTC';
+
+    /* sem voo na tela nao ha o que copiar */
+    if (!s || s.type !== 'flight') return null;
+
+    var d = s.data;
+    var lvl = levelOf(d);
+    var linha = [];
+
+    linha.push(d.flight + (airlineName(d) ? ' \u00b7 ' + airlineName(d) : ''));
+    linha.push((d.origin ? codeOf(d.origin) : '---') + ' -> ' + (d.destination ? codeOf(d.destination) : '---'));
+    linha.push((d.model || 'TYPE ?') + (lvl ? ' \u00b7 ' + lvl : ''));
+    linha.push('DEP ' + clockOf(d.depMs) + ' \u00b7 ETA ' + clockOf(d.etaMs) + ' UTC');
+    linha.push(distLine(d));
+    linha.push(hora);
+
+    return linha.join('\n');
+  }
+
+  var toastEl = null, toastTimer = 0;
+  function toast(msg) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.style.cssText = 'position:fixed;left:50%;bottom:44px;transform:translateX(-50%);z-index:99;' +
+        'padding:6px 12px;border-radius:4px;background:#14351f;border:1px solid #2f7a4b;' +
+        'color:#d7ffe4;font:12px/1.2 ui-monospace,Menlo,monospace;pointer-events:none;' +
+        'opacity:0;transition:opacity .15s';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.style.opacity = '1';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.style.opacity = '0'; }, 1400);
+  }
+
+  /* area de transferencia: clipboard API e, se ela nao estiver disponivel
+     (http fora de localhost, permissao negada), o velho execCommand */
+  function copyText(texto) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-1000px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) toast('COPIED');
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(function () { toast('COPIED'); }, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  /* clicar no painel copia a tela atual; as setas e a rodada de 30 s
+     continuam trocando de voo */
+  el.panel.addEventListener('click', function () {
+    var texto = screenText();
+    if (texto) copyText(texto);
+  });
 
   /* ------------------------------------------------------------------ */
   /* Fonia: play e gravação (o gravador é o /radio-recorder.js)          */
@@ -1436,6 +1511,10 @@
   /* URL, nada deste bloco executa.                                      */
   /* ------------------------------------------------------------------ */
 
+  /* O demo nao tem API local: os logos vem do AirGateway de producao, que
+     ja publica wwwroot/airlines. Sobrescreva com ?api= se precisar. */
+  var DEMO_API = 'https://airgateway.iguspotters.com.br';
+
   var DEMO_AIRPORTS = {
     SBFI: { iata: 'IGU', icao: 'SBFI', city: 'Foz do Iguaçu', lat: -25.593485, lon: -54.490306 },
     SARI: { iata: 'IGR', icao: 'SARI', city: 'Puerto Iguazú', lat: -25.737300, lon: -54.473500 },
@@ -1461,8 +1540,6 @@
       track: o.track == null ? 0 : o.track,
       vrate: o.vrate == null ? null : o.vrate,
       d: o.d == null ? 0 : o.d,
-      stale: false,
-      ddot: null,
       kind: o.kind,
       status: o.kind === 'arr' ? 'approaching' : o.kind === 'dep' ? 'departing' : 'overflight',
       observedAt: new Date().toISOString()
@@ -1509,7 +1586,7 @@
       return {
         aircraft: [demoFlight({
           icao: 'e48c33', callsign: 'ARG1773', kind: 'over', country: 'Argentina',
-          lat: -25.3100, lon: -54.3000, alt: 10600, speed: 231, vrate: 0, d: 38,
+          lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
           airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
           from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
         })]
@@ -1544,7 +1621,7 @@
           }),
           demoFlight({
             icao: 'e48c33', callsign: 'ARG1773', kind: 'over', country: 'Argentina',
-            lat: -25.3100, lon: -54.3000, alt: 10600, speed: 231, vrate: 0, d: 38,
+            lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
             airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
             from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
           }),
@@ -1566,12 +1643,76 @@
 
     empty: function () { return { aircraft: [] }; },
 
+    /* um cenario por logo ja publicado em wwwroot/airlines do AirGateway */
+    GLO: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48b22', callsign: 'GLO1234', kind: 'dep',
+        lat: -25.6505, lon: -54.5512, alt: 900, speed: 110, vrate: 7.2, d: 6,
+        airline: { name: 'GOL', iata: 'G3', icao: 'GLO' },
+        from: 'SBFI', to: 'SBGR', ac: 'BOEING 737-8EH', depMinAgo: 4
+      })] };
+    },
+
+    TAM: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48a11', callsign: 'TAM3344', kind: 'arr',
+        lat: -25.5052, lon: -54.3801, alt: 1400, speed: 95, vrate: -3.1, d: 15,
+        airline: { name: 'LATAM', iata: 'LA', icao: 'TAM' },
+        from: 'SBGR', to: 'SBFI', ac: 'AIRBUS A320-214'
+      })] };
+    },
+
+    LTG: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48f66', callsign: 'LTG8765', kind: 'dep',
+        lat: -25.5800, lon: -54.5200, alt: 2400, speed: 140, vrate: 6.4, d: 12,
+        airline: { name: 'LATAM', iata: 'LA', icao: 'LTG' },
+        from: 'SBFI', to: 'SBGL', ac: 'AIRBUS A321-231', depMinAgo: 9
+      })] };
+    },
+
+    AZU: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48d44', callsign: 'AZU4567', kind: 'arr',
+        lat: -25.7000, lon: -54.6200, alt: 2600, speed: 118, vrate: -4.5, d: 18,
+        airline: { name: 'AZUL', iata: 'AD', icao: 'AZU' },
+        from: 'SBCA', to: 'SBFI', ac: 'ATR 72-600'
+      })] };
+    },
+
+    ARG: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48c33', callsign: 'ARG1773', kind: 'over', country: 'Argentina',
+        lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
+        airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
+        from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
+      })] };
+    },
+
+    THY: function () {
+      return { aircraft: [demoFlight({
+        icao: '4bb1a2', callsign: 'THY216', kind: 'over', country: 'Turkey',
+        lat: -25.4200, lon: -54.3000, alt: 11887, speed: 249, vrate: 0, d: 62,
+        airline: { name: 'TURKISH', iata: 'TK', icao: 'THY' },
+        from: 'SBGR', to: 'LTFM', ac: 'AIRBUS A350-941'
+      })] };
+    },
+
+    JSM: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48e55', callsign: 'JSM9988', kind: 'dep',
+        lat: -25.5600, lon: -54.4200, alt: 1500, speed: 125, vrate: 8.1, d: 9,
+        airline: { name: 'JETSMART', iata: 'JA', icao: 'JSM' },
+        from: 'SBFI', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 7
+      })] };
+    },
+
     'err-login': function () {
-      return { aircraft: [], errorKind: 'nocreds', error: 'Set the API e-mail and password in SETTINGS.' };
+      return { aircraft: [], errorKind: 'nocreds', error: 'Configure e-mail e senha da API em Configurações.' };
     },
 
     'err-auth': function () {
-      return { aircraft: [], errorKind: 'auth', error: 'Login refused by the API.' };
+      return { aircraft: [], errorKind: 'auth', error: 'Login recusado pela API.' };
     },
 
     'err-net': function () {
@@ -1584,6 +1725,13 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
 
+  /* ?api=http://host:porta aponta o demo para outra instancia do AirGateway
+     (util quando a API local nao esta na 5164) */
+  function demoApiParam() {
+    var m = /[?&]api=([^&]*)/.exec(location.search);
+    return m ? decodeURIComponent(m[1]).replace(/\/+$/, '') : '';
+  }
+
   function applyDemo(name) {
     if (!name || !DEMO[name]) return false;
 
@@ -1594,6 +1742,7 @@
     var cenario = DEMO[name]();
 
     state.demo = name;
+    state.apiBase = demoApiParam() || DEMO_API;
     state.centerName = DEMO_AIRPORTS.SBFI.icao;
     state.airport = DEMO_AIRPORTS.SBFI;
     state.lat = DEMO_AIRPORTS.SBFI.lat;
@@ -1645,11 +1794,15 @@
     });
 
     var dica = document.createElement('span');
-    dica.textContent = '← → switch screen · click the panel to advance';
+    dica.textContent = '← → switch screen · click the panel to copy';
     dica.style.cssText = 'margin-left:auto;color:#4c4c4c';
     bar.appendChild(dica);
 
     document.body.appendChild(bar);
+
+    /* a barra ocupa o rodape: sobe o dock para nao cobrir play/gravar/ajustes */
+    var dock = document.querySelector('.dock');
+    if (dock) dock.style.bottom = (bar.offsetHeight + 10) + 'px';
   }
 
   /* ------------------------------------------------------------------ */
