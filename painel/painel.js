@@ -997,12 +997,18 @@
       var cw = maxX - minX + 1;
       var ch = maxY - minY + 1;
 
-      /* 2) todo recorte é desenhado proporcionalmente: largura limitada a
+      /* 2) fundo da arte: as logos do backend vêm em PNG opaco (GOL, LATAM,
+            AZUL, THY) e a cor do canto é o fundo. Pixel do fundo não acende */
+      var bg = [sd[0], sd[1], sd[2]];
+      var bgLum = 0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2];
+      var transparentBg = sd[3] < 24;
+
+      /* 3) todo recorte é desenhado proporcionalmente: largura limitada a
             LOGO_W e altura a LOGO_H. Wordmark da JetSmart (4.3:1) e da Azul
             (3.4:1) cabem em 30 x 7 LEDs. O corte por proporção que havia
             aqui (> 2.2) rejeitava todas as logos do CDN, caindo na sigla. */
 
-      /* 3) desenha o recorte, mantendo a proporção, no bloco de LEDs */
+      /* 4) desenha o recorte, mantendo a proporção, no bloco de LEDs */
       var c = document.createElement('canvas');
       c.width = LOGO_W;
       c.height = LOGO_H;
@@ -1018,8 +1024,21 @@
       var d = g.getImageData(0, 0, LOGO_W, LOGO_H).data;
       var px = [];
       for (var i = 0; i < LOGO_W * LOGO_H; i++) {
-        var r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2];
-        px.push([Math.min(255, r * 1.35), Math.min(255, gg * 1.35), Math.min(255, b * 1.35)]);
+        var r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2], al = d[i * 4 + 3];
+        /* fundo branco do CDN (pics.avs.io): sem alpha o canvas pinta de
+           branco e o letreiro sairia em alto relevo */
+        if (al >= 200 && transparentBg && (r + gg + b) / 3 > 235) {
+          px.push([0, 0, 0]);
+          continue;
+        }
+        /* fundo opaco da arte: só acende com contraste em relação a ele */
+        if (al >= 200 && !transparentBg &&
+            Math.abs(0.2126 * r + 0.7152 * gg + 0.0722 * b - bgLum) < 24) {
+          px.push([0, 0, 0]);
+          continue;
+        }
+        px.push(al < 24 ? [0, 0, 0]
+          : [Math.min(255, r * 1.35), Math.min(255, gg * 1.35), Math.min(255, b * 1.35)]);
       }
 
       return px;
