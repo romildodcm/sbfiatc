@@ -19,8 +19,8 @@
 
    Ajuste visual sem API nem login: /painel/?demo=<cenário> congela o painel
    num cenário de dados falsos (arrival, departure, overflight, unknown, multi,
-   empty, err-login, err-auth, err-net). A barra inferior troca de cenário e as
-   setas ← → trocam de tela. Sem o parâmetro, o modo demo não executa.
+   empty, trend, err-login, err-auth, err-net). A barra inferior troca de cenário
+   e as setas ← → trocam de tela. Sem o parâmetro, o modo demo não executa.
    ========================================================================== */
 (function () {
   'use strict';
@@ -73,7 +73,15 @@
     ONE: { name: 'VOEPASS', iata: '2Z' },
     ARG: { name: 'AEROLINEAS', iata: 'AR' },
     FBZ: { name: 'FLYBONDI', iata: 'FO' },
-    JSM: { name: 'JETSMART', iata: 'JA' }
+    JSM: { name: 'JETSMART', iata: 'JA' },
+
+    /* JetSmart tem um ICAO por país (JAT Chile, JES Argentina, JAP Peru),
+       todos com IATA JA e a mesma logo. O logo aponta para a chave JSM,
+       que é a que resolve no CDN; o ICAO do callsign fica em "code" e
+       segue sendo o que aparece no placeholder. */
+    JAT: { name: 'JETSMART', iata: 'JA', logo: 'JSM' },
+    JES: { name: 'JETSMART', iata: 'JA', logo: 'JSM' },
+    JAP: { name: 'JETSMART', iata: 'JA', logo: 'JSM' }
   };
 
   /* ------------------------------------------------------------------ */
@@ -633,8 +641,11 @@
     var known = AIRLINES[prefix];
     var name = (r && r.airline && r.airline.name) || (known && known.name) || '';
     var iata = (r && r.airline && r.airline.iata) || (known && known.iata) || '';
+    /* alias de logo: é a chave do cache, então fica dentro de AIRLINES (ex.: JES -> JSM) */
+    var logo = prefix && AIRLINES[prefix] && AIRLINES[prefix].logo;
     return {
       code: (prefix || a.icao.slice(0, 3)).toUpperCase(),
+      logoCode: String(logo || '').toUpperCase(),
       iata: String(iata).toUpperCase(),
       name: name || '',
       /* só o prefixo do callsign é ICAO de companhia; sem callsign o "code"
@@ -730,12 +741,29 @@
         speed: x.groundSpeedKt == null ? null : x.groundSpeedKt / 1.943844,
         track: x.track,
         vrate: x.verticalRateFpm == null ? null : x.verticalRateFpm / 196.8504,
+        trend: trendOf(x.verticalTrend, x.verticalRateFpm),
         d: x.distanceKm,
         kind: STATUS_KIND[x.status] || 'over',
         status: x.status,
         observedAt: x.observedAt
       };
     });
+  }
+
+  /* verticalTrend da API: "climbing" / "descending" / "level" / null.
+     null NÃO quer dizer nivelado — é ausência de dado —, então nada é
+     desenhado nesse caso. Se a API ainda não mandar o campo, cai na
+     verticalRateFpm e aplica a mesma faixa de ±1.5 m/s do painel:
+     abaixo disso o voo é considerado nivelado. */
+  var TREND_FPM = 300;
+
+  function trendOf(trend, fpm) {
+    if (trend === 'climbing' || trend === 'descending' || trend === 'level') return trend;
+
+    if (fpm == null || !isFinite(fpm)) return '';
+    if (fpm >= TREND_FPM) return 'climbing';
+    if (fpm <= -TREND_FPM) return 'descending';
+    return 'level';
   }
 
   /* ------------------------------------------------------------------ */
@@ -855,6 +883,7 @@
       depMs: depMs,
       etaMs: etaMs,
       kmToGo: kmToGo,
+      trend: a.trend || '',
       toDest: destHasPos || a.kind === 'arr'
     };
   }
@@ -913,12 +942,26 @@
   /* Logo em LEDs                                                        */
   /* ------------------------------------------------------------------ */
 
-  /* Fontes do logo, na ordem tentada: PNG do AirGateway.Api (nomeado pelo
-     ICAO do callsign) e, se não existir, o CDN por IATA. */
+  /* Fontes do logo, na ordem tentada: PNG do AirGateway.Api e, se não
+     existir, o CDN por IATA. O arquivo tenta o logoCode (chave de marca,
+     ex.: JAT/JES/JAP -> JSM) e depois o próprio ICAO do callsign, para não
+     perder um JAT.png publicado por companhia. */
+  function logoCodeOf(airline) {
+    return airline.logoCode || airline.code;
+  }
+
   function logoUrls(airline) {
     var urls = [];
-    if (airline.fromCallsign && airline.code) {
-      urls.push(apiUrl(LOGO_LOCAL + airline.code + '.png'));
+    var code = logoCodeOf(airline);
+    if (airline.fromCallsign) {
+      var codes = [];
+      [code, airline.code].forEach(function (c) {
+        c = String(c || '').toUpperCase();
+        if (c && codes.indexOf(c) < 0) codes.push(c);
+      });
+      codes.forEach(function (c) {
+        urls.push(apiUrl(LOGO_LOCAL + c + '.png'));
+      });
     }
     if (airline.iata) urls.push(LOGO_API + airline.iata + '.png');
     return urls;
@@ -987,7 +1030,7 @@
      no onReady). O cache é 1 resultado por companhia: 'loading' enquanto
      tenta, depois { px: [...] } ou { px: null }. */
   function ensureLogo(airline, onReady) {
-    var key = (airline.fromCallsign && airline.code) || airline.iata;
+    var key = (airline.fromCallsign && logoCodeOf(airline)) || airline.iata;
     var urls = key ? logoUrls(airline) : [];
     if (!urls.length) return null;
 
@@ -1047,6 +1090,82 @@
     var fl = Math.round(d.a.alt * 3.28084 / 100);
     if (fl < 1) return '';
     return 'FL' + (fl < 100 ? ('00' + fl).slice(-3) : String(fl));
+  }
+
+  /* Setas de tendencia vertical no bloco de 7 linhas da ultima linha, no
+     desenho de ↘ e ↗: a cabeca e o canto inferior (ou superior) direito —
+     barra horizontal na ponta e barra vertical na direita (4 LEDs cada) — e
+     a haste sai dele na diagonal, da esquerda para a direita. */
+  var ARROWS = {
+    climbing: ['...####', '.....##', '....#.#', '...#..#', '..#....', '.#.....', '#......'],
+    descending: ['#......', '.#.....', '..#....', '...#..#', '....#.#', '.....##', '...####']
+  };
+  var ARROW_W = 7;
+
+  /* seta origem -> destino em 7 px: haste longa com a ponta encostada.
+     O marcador \u0000 no texto da rota e trocado por este bloco. */
+  var ROUTE_ARROW = [
+    '....#',
+    '.....#',
+    '......#',
+    '#######' + '#',
+    '......#',
+    '.....#',
+    '....#'
+  ];
+  var ROUTE_MARK = '\u0000';
+  var ROUTE_ARROW_W = 8;
+
+  /* largura da rota com a seta dedicada no lugar de '-' + '>' */
+  function routeWidth(str) {
+    var s = normalizeText(str);
+    var w = 0;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      /* a seta ocupa o marcador e o respiro que vem depois dele */
+      w += ch === ROUTE_MARK ? ROUTE_ARROW_W + 1 : advanceOf(ch);
+    }
+    return w - 1;
+  }
+
+  /* desenha a rota trocando o marcador pelo glifo da seta */
+  function textRoute(x, y, str, maxPx, c) {
+    var s = normalizeText(str);
+    while (s.length > 2 && routeWidth(s) > maxPx) s = s.slice(0, -1);
+
+    var cx = x;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === ROUTE_MARK) {
+        for (var row = 0; row < ROUTE_ARROW.length; row++) {
+          for (var col = 0; col < ROUTE_ARROW_W; col++) {
+            if (ROUTE_ARROW[row].charAt(col) === '#') px(cx + col, y + row, c);
+          }
+        }
+        cx += ROUTE_ARROW_W + 1;
+        continue;
+      }
+      text(cx, y, ch, c, 1);
+      cx += advanceOf(ch);
+    }
+  }
+
+  /* largura do bloco da seta (5 do glifo + 1 de respiro) ou 0 se nao houver */
+  function arrowOf(trend) {
+    return ARROWS[trend] ? ARROWS[trend] : null;
+  }
+
+  function drawTrend(trend, xEnd, y) {
+    var g = arrowOf(trend);
+    if (!g) return;
+
+    /* 'level' nao tem glifo: nada a desenhar. Verde, igual a distancia da
+       ultima linha, de quem ela fica ao lado. */
+    for (var row = 0; row < g.length; row++) {
+      for (var col = 0; col < ARROW_W; col++) {
+        if (g[row].charAt(col) === '#') px(xEnd + col, y + row, C.green);
+      }
+    }
   }
 
   function kmText(km) {
@@ -1110,15 +1229,20 @@
        meio do vão livre (3 LED acima, 3 abaixo) — no 17 ela encostava no voo */
     for (var k = tx; k < W; k++) px(k, 19, C.green);
 
-    /* origem/destino desconhecidos aparecem só de um lado da seta */
+    /* origem/destino desconhecidos aparecem só de um lado da seta.
+       A seta "->" vira um glifo dedicado: como '-' e '>' são caracteres da
+       matriz, cada um gastava uma célula de 6 px e a ponta da seta ficava
+       a 5 LEDs de distancia da haste. Aqui a haste tem 7 px e a ponta
+       encosta nela. */
     var org = d.origin ? codeOf(d.origin) : '';
     var dst = d.destination ? codeOf(d.destination) : '';
-    var rota = (org ? org + ' ' : '') + '-> ' + (dst || '?');
+    var rota = (org ? org + ' ' : '') + '\u0000' + ' ' + (dst || '?');
 
-    /* nível de voo fecha a linha da rota, alinhado à direita */
+    /* o nivel de voo fecha a linha da rota, a direita */
     var lvl = levelOf(d);
     var lvlW = lvl ? textWidth(lvl, 1) : 0;
-    text(tx, 23, truncateToWidth(rota, W - tx - lvlW - 2), C.cyan);
+
+    textRoute(tx, 23, rota, W - tx - lvlW - 2, C.cyan);
     if (lvl) textRight(W, 23, lvl, C.cyan);
 
     /* da rota para baixo, espacamento uniforme de 4 LEDs entre as linhas:
@@ -1130,14 +1254,29 @@
     text(0, 45, dep, C.amber);
     text(textWidth(dep, 1) + 7, 45, 'ETA ' + clockOf(d.etaMs), C.white);
 
-    /* ultima linha: distancia a esquerda, posicao na rodada a direita.
-       Sem contador, a distancia usa a linha inteira: o limite é em pixels
-       (truncateToWidth), nao em caracteres. */
+    /* ultima linha: distancia a esquerda, seta de tendencia no fim a direita
+       (↗ subindo, ↘ descendo; nada em "level" ou sem dado) e, se houver,
+       a posicao na rodada. A seta tem 1 LED de folga da borda. */
     var pos = state.screens.length > 1
       ? (state.screenIndex + 1) + '/' + state.screens.length
       : '';
-    text(0, 56, truncateToWidth(distLine(d), pos ? W - textWidth(pos, 1) - 3 : W - 3), C.green);
-    if (pos) textRight(W, 56, pos, C.dimText);
+    var arrowW = arrowOf(d.trend) ? ARROW_W : 0;
+
+    /* a seta encosta na borda direita, com 1 LED de respiro */
+    var arrowX = W - arrowW - 1;
+
+    /* o contador vai a esquerda da seta, quando as duas couberem */
+    var posW = 0;
+    if (pos) {
+      posW = textWidth(pos, 1) + 1;
+      if (arrowX - 3 - posW < 0) posW = 0;   // sem espaco: esconde o contador
+    }
+
+    var distMax = (arrowW ? arrowX - 3 : W - 3) - (posW ? posW + 3 : 0);
+    text(0, 56, truncateToWidth(distLine(d), distMax), C.green);
+
+    if (arrowW) drawTrend(d.trend, arrowX, 56);
+    if (pos && posW) textRight(arrowX - 3, 56, pos, C.dimText);
   }
 
   function drawEmpty() {
@@ -1447,11 +1586,16 @@
 
     var d = s.data;
     var lvl = levelOf(d);
+    /* o texto copiado tem setas de verdade; "level" e sem dado vira '-' */
+    var seta = d.trend === 'climbing' ? '\u2197'
+      : d.trend === 'descending' ? '\u2198'
+      : '';
     var linha = [];
 
     linha.push(d.flight + (airlineName(d) ? ' \u00b7 ' + airlineName(d) : ''));
     linha.push((d.origin ? codeOf(d.origin) : '---') + ' -> ' + (d.destination ? codeOf(d.destination) : '---'));
-    linha.push((d.model || 'TYPE ?') + (lvl ? ' \u00b7 ' + lvl : ''));
+    linha.push((d.model || 'TYPE ?') + (lvl ? ' \u00b7 ' + lvl : '') +
+      (seta ? ' \u00b7 ' + seta + ' ' + (d.trend === 'climbing' ? 'CLB' : 'DES') : ''));
     linha.push('DEP ' + clockOf(d.depMs) + ' \u00b7 ETA ' + clockOf(d.etaMs) + ' UTC');
     linha.push(distLine(d));
     linha.push(hora);
@@ -1601,6 +1745,10 @@
       speed: o.speed == null ? null : o.speed,
       track: o.track == null ? 0 : o.track,
       vrate: o.vrate == null ? null : o.vrate,
+      /* mesmo criterio de trendOf(): sem "trend" explicito, deduz do vrate */
+      trend: o.trend !== undefined
+        ? o.trend
+        : trendOf(null, o.vrate == null ? null : o.vrate * 196.8504),
       d: o.d == null ? 0 : o.d,
       kind: o.kind,
       status: o.kind === 'arr' ? 'approaching' : o.kind === 'dep' ? 'departing' : 'overflight',
@@ -1767,6 +1915,60 @@
         airline: { name: 'JETSMART', iata: 'JA', icao: 'JSM' },
         from: 'SBFI', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 7
       })] };
+    },
+
+    /* caso real: EZE -> IGR com a JetSmart Argentina (ICAO JES, IATA JA).
+       O nome da companhia vem da AIRLINES: o adsbdb devolve "JS Aviation". */
+    JES: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48e56', callsign: 'JES3144', kind: 'dep',
+        lat: -25.5700, lon: -54.4400, alt: 102 * 30.48, speed: 120, vrate: 0, d: 67,
+        airline: { name: 'JS Aviation', iata: 'JA', icao: 'JES' },
+        from: 'SAEZ', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 20
+      })] };
+    },
+
+    /* a mesma marca pelo ICAO do Chile: mesma logo, placeholder JAT */
+    JAT: function () {
+      return { aircraft: [demoFlight({
+        icao: 'e48e57', callsign: 'JAT4412', kind: 'dep',
+        lat: -25.5700, lon: -54.4400, alt: 112 * 30.48, speed: 118, vrate: 0, d: 67,
+        airline: { name: 'JetSMART', iata: 'JA', icao: 'JAT' },
+        from: 'SAEZ', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 20
+      })] };
+    },
+
+    /* seta de tendencia: os quatro casos do verticalTrend da API */
+    trend: function () {
+      return {
+        aircraft: [
+          demoFlight({
+            icao: 'b10002', callsign: 'GLO1001', kind: 'dep', trend: 'climbing',
+            lat: -25.6505, lon: -54.5512, alt: 900, speed: 110, vrate: 6, d: 6,
+            airline: { name: 'GOL', iata: 'G3', icao: 'GLO' },
+            from: 'SBFI', to: 'SBGR', ac: 'BOEING 737-8EH', depMinAgo: 4
+          }),
+          demoFlight({
+            icao: 'b10003', callsign: 'TAM2002', kind: 'arr', trend: 'descending',
+            lat: -25.5052, lon: -54.3801, alt: 1400, speed: 95, vrate: -5, d: 15,
+            airline: { name: 'LATAM', iata: 'LA', icao: 'TAM' },
+            from: 'SBGR', to: 'SBFI', ac: 'AIRBUS A320-214'
+          }),
+          demoFlight({
+            icao: 'b10004', callsign: 'ARG3003', kind: 'over', country: 'Argentina',
+            trend: 'level',
+            lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
+            airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
+            from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
+          }),
+          demoFlight({
+            icao: 'b10005', callsign: 'JSM4004', kind: 'over', trend: null,
+            lat: -25.4200, lon: -54.3000, alt: 11887, speed: 249, vrate: 0, d: 62,
+            airline: { name: 'JETSMART', iata: 'JA', icao: 'JSM' },
+            from: 'SBCA', to: 'SAEZ', ac: 'AIRBUS A320-232'
+          })
+        ]
+      };
     },
 
     'err-login': function () {
