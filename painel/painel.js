@@ -641,7 +641,8 @@
     var known = AIRLINES[prefix];
     var name = (r && r.airline && r.airline.name) || (known && known.name) || '';
     var iata = (r && r.airline && r.airline.iata) || (known && known.iata) || '';
-    /* alias de logo: é a chave do cache, então fica dentro de AIRLINES (ex.: JES -> JSM) */
+    /* alias de logo: é a chave do cache, então fica dentro de AIRLINES
+       (ex.: os ICAOs da JetSmart, JAT/JES/JAP, apontam para JSM) */
     var logo = prefix && AIRLINES[prefix] && AIRLINES[prefix].logo;
     return {
       code: (prefix || a.icao.slice(0, 3)).toUpperCase(),
@@ -996,9 +997,10 @@
       var cw = maxX - minX + 1;
       var ch = maxY - minY + 1;
 
-      /* 2) wordmark (letreiro muito largo) vira sigla: em 30 x 27 LEDs
-            um letreiro de 5:1 não lê nada */
-      if (cw / ch > 2.2) return null;
+      /* 2) todo recorte é desenhado proporcionalmente: largura limitada a
+            LOGO_W e altura a LOGO_H. Wordmark da JetSmart (4.3:1) e da Azul
+            (3.4:1) cabem em 30 x 7 LEDs. O corte por proporção que havia
+            aqui (> 2.2) rejeitava todas as logos do CDN, caindo na sigla. */
 
       /* 3) desenha o recorte, mantendo a proporção, no bloco de LEDs */
       var c = document.createElement('canvas');
