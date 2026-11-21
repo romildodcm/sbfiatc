@@ -19,7 +19,7 @@
 
    Ajuste visual sem API nem login: /painel/?demo=<cenário> congela o painel
    num cenário de dados falsos (arrival, departure, overflight, unknown, multi,
-   empty, trend, err-login, err-auth, err-net). A barra inferior troca de cenário
+   empty, trend, err-login, err-auth, err-rate, err-net). A barra inferior troca de cenário
    e as setas ← → trocam de tela. Sem o parâmetro, o modo demo não executa.
    ========================================================================== */
 (function () {
@@ -415,7 +415,16 @@
     return String(state.apiBase || DEFAULT_API).replace(/\/+$/, '') + path;
   }
 
-  /* e-mail/senha → access token (30 min); renova sozinho quando expira */
+  /* Mensagens fixas do login. O backend responde 401 para usuário inexistente,
+     senha errada e usuário inativo — e o painel repete a mesma mensagem
+     genérica, para não dizer se a conta existe. */
+  var AUTH_FAIL_MSG = 'E-mail, usuário ou senha inválidos';
+  var AUTH_RATE_MSG = 'Muitas tentativas, aguarde um minuto';
+
+  /* e-mail OU username + senha → access token (30 min); renova sozinho quando
+     expira. O payload NAO muda: o identificador (com @ = e-mail, sem @ =
+     username, decisão do backend) vai no campo "email"; o username em
+     qualquer caixa é aceito pela API. "user.email" sempre volta como o e-mail. */
   function login() {
     if (!state.email || !state.password) {
       var sem = new Error('sem credenciais');
@@ -435,9 +444,15 @@
       body: JSON.stringify({ email: state.email, password: state.password })
     }).then(function (r) {
       if (r.status === 401) {
-        var e1 = new Error('e-mail ou senha inválidos');
+        var e1 = new Error(AUTH_FAIL_MSG);
         e1.code = 'auth';
         throw e1;
+      }
+      if (r.status === 429) {
+        /* rate limit do login: 10 tentativas/min por IP */
+        var e429 = new Error(AUTH_RATE_MSG);
+        e429.code = 'rate';
+        throw e429;
       }
       if (!r.ok) {
         var e2 = new Error('login respondeu HTTP ' + r.status);
@@ -450,7 +465,7 @@
       state.tokenExpiresAt = Date.now() + (j.expiresIn || 1800) * 1000;
       state.user = j.user || null;
       state.airportId = null;      // recalculado conforme o usuário logado
-      log('LOGIN ok', state.user && state.user.email, '· token', (j.expiresIn | 0) + 's');
+      log('LOGIN ok', (state.user && userLabel(state.user)) || '', '· token', (j.expiresIn | 0) + 's');
       return state.token;
     });
 
@@ -464,6 +479,14 @@
     });
 
     return state.loginPending;
+  }
+
+  /* Nome exibido do usuário logado: o username (o mesmo que ele digita para
+     entrar), com o e-mail como fallback quando a conta não tem username
+     (user.username vem string | null). */
+  function userLabel(user) {
+    if (!user) return '';
+    return user.username || user.email || '';
   }
 
   /* Admin sem aeroporto vinculado: escolhe o primeiro aeroporto ativo e
@@ -800,13 +823,15 @@
         var kind = err && err.code;
 
         if (kind === 'nocreds') {
-          msg = 'Configure e-mail e senha da API em Configurações.';
+          msg = 'Configure e-mail ou usuário e senha da API em Configurações.';
         } else if (kind === 'airport') {
           msg = 'Este usuário não tem aeroporto vinculado — vincule em /api/users ou use um admin.';
         } else if (kind === 'auth') {
           state.token = '';
           state.tokenExpiresAt = 0;
-          msg = (err && err.message) || 'Login recusado pela API.';
+          msg = AUTH_FAIL_MSG;
+        } else if (kind === 'rate') {
+          msg = AUTH_RATE_MSG;
         } else if (err && err.name === 'TypeError') {
           msg = 'Não consegui falar com ' + state.apiBase +
             ' (API parada? CORS? veja Cors__AllowedOrigins).';
@@ -1113,8 +1138,8 @@
     return 'FL' + (fl < 100 ? ('00' + fl).slice(-3) : String(fl));
   }
 
-  /* Setas de tendencia vertical no bloco de 7 linhas da ultima linha, no
-     desenho de ↘ e ↗: a cabeca e o canto inferior (ou superior) direito —
+  /* Setas de tendencia vertical no bloco de 7 linhas do fim da 2a linha (voo),
+     no desenho de ↘ e ↗: a cabeca e o canto inferior (ou superior) direito —
      barra horizontal na ponta e barra vertical na direita (4 LEDs cada) — e
      a haste sai dele na diagonal, da esquerda para a direita. */
   var ARROWS = {
@@ -1208,7 +1233,7 @@
 
   /* Layout do painel da foto:
        [logo 30x27] COMPANHIA
-                    VOO
+                    VOO        ↗/↘ (tendencia, fim da 2a linha)
                     ────────── linha verde
                     ORG -> DST
        MODELO
@@ -1243,8 +1268,17 @@
     var tx = LOGO_W + 4;
     var folga = 15;
 
+    /* a seta de tendencia (↗ subindo, ↘ descendo; nada em "level" ou sem
+       dado) fecha a 2a linha do painel, a do numero do voo, com 1 LED de
+       folga da borda. Ela ocupa as linhas 9..15, entao o meio da linha do voo
+       (12) coincide com a linha do meio da seta (12). */
+    var trendW = arrowOf(d.trend) ? ARROW_W - 1 : 0;
+    var trendX = W - trendW - 1;
+    var vooMax = Math.floor((trendX - (trendW ? 2 : 0) - tx + 1) / 6);
+
     text(tx, 0, truncate(airlineName(d), folga), C.white);
-    text(tx, 9, truncate(d.flight, folga), C.white);
+    text(tx, 9, truncate(d.flight, trendW ? vooMax : folga), C.white);
+    if (trendW) drawTrend(d.trend, trendX, 9);
 
     /* linha verde dividindo o cabeçalho (companhia + voo) da rota: fica no
        meio do vão livre (3 LED acima, 3 abaixo) — no 17 ela encostava no voo */
@@ -1275,29 +1309,22 @@
     text(0, 45, dep, C.amber);
     text(textWidth(dep, 1) + 7, 45, 'ETA ' + clockOf(d.etaMs), C.white);
 
-    /* ultima linha: distancia a esquerda, seta de tendencia no fim a direita
-       (↗ subindo, ↘ descendo; nada em "level" ou sem dado) e, se houver,
-       a posicao na rodada. A seta tem 1 LED de folga da borda. */
+    /* ultima linha: distancia a esquerda e, quando couber, a posicao na
+       rodada no fim da linha (a seta saiu daqui e foi para a 2a linha) */
     var pos = state.screens.length > 1
       ? (state.screenIndex + 1) + '/' + state.screens.length
       : '';
-    var arrowW = arrowOf(d.trend) ? ARROW_W : 0;
 
-    /* a seta encosta na borda direita, com 1 LED de respiro */
-    var arrowX = W - arrowW - 1;
-
-    /* o contador vai a esquerda da seta, quando as duas couberem */
     var posW = 0;
     if (pos) {
       posW = textWidth(pos, 1) + 1;
-      if (arrowX - 3 - posW < 0) posW = 0;   // sem espaco: esconde o contador
+      if (W - 3 - posW < 0) posW = 0;   // sem espaco: esconde o contador
     }
 
-    var distMax = (arrowW ? arrowX - 3 : W - 3) - (posW ? posW + 3 : 0);
+    var distMax = W - 3 - (posW ? posW + 3 : 0);
     text(0, 56, truncateToWidth(distLine(d), distMax), C.green);
 
-    if (arrowW) drawTrend(d.trend, arrowX, 56);
-    if (pos && posW) textRight(arrowX - 3, 56, pos, C.dimText);
+    if (pos && posW) textRight(W - 1, 56, pos, C.dimText);
   }
 
   function drawEmpty() {
@@ -1318,6 +1345,10 @@
     } else if (state.errorKind === 'auth') {
       textCenter(24, 'AUTH FAILED', C.red);
       textCenter(36, 'SETTINGS > API', C.amber);
+    } else if (state.errorKind === 'rate') {
+      /* rate limit do login: 10 tentativas/min por IP — só esperar */
+      textCenter(24, 'TOO MANY TRIES', C.red);
+      textCenter(36, 'WAIT A MINUTE', C.amber);
     } else {
       textCenter(24, 'NO SIGNAL', C.red);
       textCenter(36, 'API / NET', C.dimText);
@@ -1462,9 +1493,9 @@
   function updateCfgStatus() {
     var user = state.user;
     var linhaUser = user
-      ? user.email + ' · ' + user.role +
+      ? userLabel(user) + ' · ' + user.role +
         (user.airport ? ' · ' + user.airport.icao : ' · sem aeroporto')
-      : 'nenhum (entre com e-mail e senha)';
+      : 'nenhum (entre com e-mail ou usuário e senha)';
 
     var expira = state.token && state.tokenExpiresAt > Date.now()
       ? 'token válido por ' + Math.round((state.tokenExpiresAt - Date.now()) / 60000) + ' min'
@@ -1493,7 +1524,7 @@
       return;
     }
     if (!email || !senha) {
-      setAlert('Informe e-mail e senha do usuário da API.');
+      setAlert('Informe e-mail ou usuário e senha do usuário da API.');
       return;
     }
 
@@ -1993,11 +2024,15 @@
     },
 
     'err-login': function () {
-      return { aircraft: [], errorKind: 'nocreds', error: 'Configure e-mail e senha da API em Configurações.' };
+      return { aircraft: [], errorKind: 'nocreds', error: 'Configure e-mail ou usuário e senha da API em Configurações.' };
     },
 
     'err-auth': function () {
-      return { aircraft: [], errorKind: 'auth', error: 'Login recusado pela API.' };
+      return { aircraft: [], errorKind: 'auth', error: AUTH_FAIL_MSG };
+    },
+
+    'err-rate': function () {
+      return { aircraft: [], errorKind: 'rate', error: AUTH_RATE_MSG };
     },
 
     'err-net': function () {

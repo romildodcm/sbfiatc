@@ -88,7 +88,9 @@
 
   <!-- ============ CONFIGURAÇÕES: API e credenciais ============ -->
   <div class="overlay" id="cfg" hidden>
-    <form class="cfg" id="cfgForm" autocomplete="off" role="dialog" aria-modal="true"
+    <!-- autocomplete="on": sem isso o navegador ignora o autocomplete="username"
+         do campo de login e não oferece o usuário salvo -->
+    <form class="cfg" id="cfgForm" autocomplete="on" role="dialog" aria-modal="true"
           aria-label="Configurações">
       <div class="cfg-title">Configurações</div>
 
@@ -101,10 +103,14 @@
       </div>
 
       <div class="cfg-grid">
+        <!-- login aceita e-mail OU usuário: type=text, sem validação de formato.
+             A API decide pelo @ (com @ = e-mail; sem @ = username) e recebe
+             sempre no campo "email" do payload. -->
         <label class="field">
-          <span>e-mail</span>
-          <input id="email" type="email" spellcheck="false" autocomplete="username"
-                 placeholder="voce@exemplo.com">
+          <span>E-mail ou usuário</span>
+          <input id="email" type="text" spellcheck="false" autocapitalize="none"
+                 autocomplete="username" inputmode="text"
+                 placeholder="voce@exemplo.com ou usuario">
         </label>
         <label class="field">
           <span>senha</span>
