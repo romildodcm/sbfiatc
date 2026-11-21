@@ -49,7 +49,10 @@
   /* Constantes de dados                                                 */
   /* ------------------------------------------------------------------ */
 
-  var DEFAULT_API = 'http://localhost:5164';   // AirGateway.Api
+  /* AirGateway.Api: endereço fixo, sem campo em Configurações. Para apontar o
+     painel a outra instância (dev), use /painel/?api=http://host:porta. */
+  var DEFAULT_API = 'https://airgateway.iguspotters.com.br';
+  var API_BASE = apiParam() || DEFAULT_API;
 
   var ROUTE_API = 'https://api.adsbdb.com/v0';
   var LOGO_LOCAL = '/airlines/';               // AirGateway.Api (wwwroot/airlines)
@@ -188,7 +191,7 @@
     led: $('led'), glow: $('glow'), panel: $('panel'), boot: $('boot'),
     btnCfg: $('btnCfg'), cfg: $('cfg'), cfgForm: $('cfgForm'),
     cfgStatus: $('cfgStatus'), alertBox: $('alertBox'),
-    apiBase: $('apiBase'), email: $('email'), password: $('password'),
+    email: $('email'), password: $('password'),
     btnClearKey: $('btnClearKey'),
     btnCloseCfg: $('btnCloseCfg'),
     playBtn: $('playBtn'), player: $('radioPlayer'), btnFull: $('btnFull'),
@@ -212,7 +215,7 @@
     lon: -54.490306,
     interval: 60,
 
-    apiBase: DEFAULT_API,
+    apiBase: API_BASE,
     email: '',
     password: '',
     token: '',
@@ -521,29 +524,10 @@
     return state.airportsPending;
   }
 
-  /* Se o endereço configurado não responde (API parada ou CORS), tenta a
-     mesma origem da página — cobre o caso do proxy de dev e de servir o
-     painel pelo mesmo domínio da API. */
-  function podeCairParaOrigem() {
-    return location.protocol !== 'file:' &&
-      location.origin !== state.apiBase &&
-      state.apiBase !== location.origin;
-  }
-
+  /* O endereço da API é fixo (API_BASE): não há mais campo em Configurações
+     nem troca silenciosa para a origem da página, que escondia o endereço
+     onde a API estava falhando. O retry vale só para o token/sem-aeroporto. */
   function fetchLive(retry) {
-    return executarFetchLive(retry).catch(function (err) {
-      if (err && err.name === 'TypeError' && !retry && podeCairParaOrigem()) {
-        log('falha de rede/CORS em', state.apiBase, '→ tentando', location.origin);
-        state.apiBase = location.origin;
-        state.token = '';
-        state.airportId = null;
-        return executarFetchLive(true);
-      }
-      throw err;
-    });
-  }
-
-  function executarFetchLive(retry) {
     return login()
       .then(function () {
         /* a resposta do login diz se o usuário tem aeroporto vinculado */
@@ -969,7 +953,7 @@
   /* ------------------------------------------------------------------ */
 
   /* Fontes do logo, na ordem tentada: PNG do AirGateway.Api e, se não
-     existir, o CDN por IATA. O arquivo tenta o logoCode (chave de marca,
+     existir, o CDN por IATA. O arquivo tenta o logoCode (chave da marca,
      ex.: JAT/JES/JAP -> JSM) e depois o próprio ICAO do callsign, para não
      perder um JAT.png publicado por companhia. */
   function logoCodeOf(airline) {
@@ -1408,32 +1392,31 @@
   /* Persistência                                                        */
   /* ------------------------------------------------------------------ */
 
-  var LS_KEY = 'sbfiPainelApi';          // { apiBase, email, password }
+  var LS_KEY = 'sbfiPainelApi';          // { email, password }
   var LS_ROUTES = 'sbfiRadarRoutes';
   var LS_AC = 'sbfiRadarAc';
   var STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
-  /* credenciais da API ficam no localStorage deste navegador */
+  /* credenciais da API ficam no localStorage deste navegador; o endereco da
+     API nao e salvo (e fixo), e um "apiBase" antigo no registro e ignorado */
   function loadCreds() {
     try {
       var k = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
       if (!k) return;
-      state.apiBase = k.apiBase || DEFAULT_API;
       state.email = k.email || '';
       state.password = k.password || '';
     } catch (e) { }
   }
 
-  function saveCreds(apiBase, email, password) {
-    state.apiBase = apiBase || DEFAULT_API;
+  function saveCreds(email, password) {
     state.email = email;
     state.password = password;
     state.token = '';
     state.tokenExpiresAt = 0;
     try {
-      if (email || password || apiBase) {
+      if (email || password) {
         localStorage.setItem(LS_KEY, JSON.stringify({
-          apiBase: state.apiBase, email: email, password: password
+          password: password
         }));
       } else {
         localStorage.removeItem(LS_KEY);
@@ -1479,13 +1462,12 @@
   }
 
   function openCfg() {
-    el.apiBase.value = state.apiBase;
     el.email.value = state.email;
     el.password.value = state.password;
     setAlert('');
     updateCfgStatus();
     el.cfg.hidden = false;
-    el.apiBase.focus();
+    el.email.focus();
   }
 
   function closeCfg() { el.cfg.hidden = true; }
@@ -1515,20 +1497,15 @@
   el.cfgForm.addEventListener('submit', function (ev) {
     ev.preventDefault();
 
-    var base = el.apiBase.value.trim().replace(/\/+$/, '') || DEFAULT_API;
     var email = el.email.value.trim();
     var senha = el.password.value;
 
-    if (!/^https?:\/\//i.test(base)) {
-      setAlert('Endereço da API inválido: use http://localhost:5164');
-      return;
-    }
     if (!email || !senha) {
       setAlert('Informe e-mail ou usuário e senha do usuário da API.');
       return;
     }
 
-    saveCreds(base, email, senha);
+    saveCreds(email, senha);
     closeCfg();
     state.error = '';
     state.nextFetchAt = 0;
@@ -1536,13 +1513,12 @@
   });
 
   el.btnClearKey.addEventListener('click', function () {
-    saveCreds('', '', '');
+    saveCreds('', '');
     state.user = null;
     state.airportId = null;
     state.aircraft = [];
     state.screens = [];
     state.error = '';
-    el.apiBase.value = DEFAULT_API;
     el.email.value = '';
     el.password.value = '';
     setAlert('Credenciais removidas deste navegador.');
@@ -1769,9 +1745,9 @@
   /* URL, nada deste bloco executa.                                      */
   /* ------------------------------------------------------------------ */
 
-  /* O demo nao tem API local: os logos vem do AirGateway de producao, que
-     ja publica wwwroot/airlines. Sobrescreva com ?api= se precisar. */
-  var DEMO_API = 'https://airgateway.iguspotters.com.br';
+  /* O demo usa a mesma API do painel (API_BASE): os logos vem de
+     wwwroot/airlines do AirGateway. Sobrescreva com ?api= se precisar. */
+  var DEMO_API = API_BASE;
 
   var DEMO_AIRPORTS = {
     SBFI: { iata: 'IGU', icao: 'SBFI', city: 'Foz do Iguaçu', lat: -25.593485, lon: -54.490306 },
@@ -2046,8 +2022,15 @@
   }
 
   /* ?api=http://host:porta aponta o demo para outra instancia do AirGateway
-     (util quando a API local nao esta na 5164) */
+     (util quando a API local nao e a de producao) */
   function demoApiParam() {
+    var m = /[?&]api=([^&]*)/.exec(location.search);
+    return m ? decodeURIComponent(m[1]).replace(/\/+$/, '') : '';
+  }
+
+  /* apiParam() roda antes do bloco do demo montar (var DEMO_API), por isso
+     procura o parametro direto na URL em vez de chamar demoApiParam(). */
+  function apiParam() {
     var m = /[?&]api=([^&]*)/.exec(location.search);
     return m ? decodeURIComponent(m[1]).replace(/\/+$/, '') : '';
   }

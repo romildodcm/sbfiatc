@@ -1,5 +1,5 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v19';
+const CACHE_NAME = 'sbfi-atc-v20';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos

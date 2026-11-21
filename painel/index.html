@@ -86,21 +86,14 @@
   <!-- stream da fonia: o /radio-recorder.js usa este player para o pré-roll -->
   <audio id="radioPlayer" preload="none" crossorigin="anonymous"></audio>
 
-  <!-- ============ CONFIGURAÇÕES: API e credenciais ============ -->
+  <!-- ============ CONFIGURAÇÕES: credenciais ============ -->
   <div class="overlay" id="cfg" hidden>
     <!-- autocomplete="on": sem isso o navegador ignora o autocomplete="username"
-         do campo de login e não oferece o usuário salvo -->
+         do campo de login e não oferece o usuário salvo.
+         O endereço da API não é editável: é fixo, definido no painel.js. -->
     <form class="cfg" id="cfgForm" autocomplete="on" role="dialog" aria-modal="true"
           aria-label="Configurações">
       <div class="cfg-title">Configurações</div>
-
-      <div class="cfg-grid">
-        <label class="field full">
-          <span>endereço da API</span>
-          <input id="apiBase" type="url" spellcheck="false" autocomplete="off"
-                 placeholder="http://localhost:5164">
-        </label>
-      </div>
 
       <div class="cfg-grid">
         <!-- login aceita e-mail OU usuário: type=text, sem validação de formato.
