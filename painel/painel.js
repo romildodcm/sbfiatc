@@ -43,14 +43,14 @@
 
   var W = 128, H = 64;              // 320 × 160 mm em P2.5
   var PAGE_MS = 30000;              // cada voo fica 30 s na tela
-  /* logo, em LEDs: 42 colunas, 14:9 — proporção larga que casa com as logos
+  /* logo, em LEDs: 40 colunas, ~1.5:1 — proporção larga que casa com as logos
      wide (wordmark da JetSmart 4.3:1, Azul 3.4:1). O logotipo grande cabe nas
      3 primeiras linhas do cabeçalho. */
-  var LOGO_W = 42, LOGO_H = 27;
-  var LOGO_GAP = 2;                 // LEDs livres entre a logo e o texto
-  /* x do texto do cabeçalho, depois do respiro. Com 84 px livres, a rota no
-     máximo ("2/12 FM IGU -> SAO PAULO", 86) perde só a última letra; com nível
-     de voo, a linha se ajusta sem encostar nele. */
+  var LOGO_W = 40, LOGO_H = 27;
+  var LOGO_GAP = 4;                 // LEDs livres entre a logo e o texto
+  /* x do texto do cabeçalho, depois do respiro (44). Com 82 px livres, a
+     rota no máximo ("2/12 FM IGU -> SAO PAULO") perde mais uma letra do
+     destino; com nível de voo, a linha se ajusta sem encostar nele. */
   var LOGO_TEXT_X = LOGO_W + LOGO_GAP;
 
   /* ------------------------------------------------------------------ */
@@ -1022,7 +1022,7 @@
 
       /* 3) todo recorte é desenhado proporcionalmente: largura limitada a
             LOGO_W e altura a LOGO_H. Wordmark da JetSmart (4.3:1) e da Azul
-            (3.4:1) cabem em 36 x 9 LEDs. O corte por proporção que havia
+            (3.4:1) cabem em 40 x 9 LEDs. O corte por proporção que havia
             aqui (> 2.2) rejeitava todas as logos do CDN, caindo na sigla. */
 
       /* 4) desenha o recorte, mantendo a proporção, no bloco de LEDs */
@@ -1235,7 +1235,7 @@
 
   /* Layout do painel da foto (logo alargada: ocupa as 3 primeiras linhas
      e empurra o texto do cabeçalho para a direita):
-       [logo 42x27]  COMPANHIA    (LOGO_GAP: 2 LEDs livres entre os dois)
+       [logo 40x27]    COMPANHIA  (LOGO_GAP: 4 LEDs livres entre os dois)
                     VOO        ↗/↘ (tendencia, fim da 2a linha)
                     ────────── linha verde
                     ORG -> DST
