@@ -374,7 +374,7 @@
 
   function fmtDist(km) {
     if (km == null || !isFinite(km)) return '—';
-    return km < 10 ? km.toFixed(1) : String(Math.round(km));
+    return String(Math.round(km));
   }
 
   function fmtAltFt(a) {
@@ -1216,9 +1216,11 @@
     }
   }
 
+  /* distância sempre em km inteiros: um "9.4" gastaria LEDs em algo que
+     ninguém lê no painel (e prende a atenção no número errado) */
   function kmText(km) {
     if (km == null || !isFinite(km)) return '?';
-    return km < 10 ? km.toFixed(1) : String(Math.round(km));
+    return String(Math.round(km));
   }
 
   /* código curto da estação: IATA quando a API informa, senão o ICAO */
