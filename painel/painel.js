@@ -1299,17 +1299,9 @@
 
     text(tx, 0, truncate(airlineName(d), folga), C.white);
 
-    /* a 2a linha é o voo; com "FM ORG ADSB" (origem informada só pela
-       aeronave) o nome da estação entra junto, e é ele que cede quando não
-       cabe — o número do voo nunca é cortado. " FM " + 5 de respiro = 12 px
-       reservados. */
-    var voo = truncate(d.flight, trendW ? vooMax : folga);
-    var fm = '';
-    if (d.fromCallsign && d.a.adbdbOrigin) {
-      var fmMax = rotaMax - textWidth(voo, 1) - 12;
-      if (fmMax > 5) fm = ' FM ' + truncateToWidth(d.a.adbdbOrigin, fmMax);
-    }
-    text(tx, 9, voo + fm, C.white);
+    /* a 2a linha é só o voo; o número nunca é cortado — quem cede espaço é
+       a rota (ver rotaMax acima) */
+    text(tx, 9, truncate(d.flight, trendW ? vooMax : folga), C.white);
     if (trendW) drawTrend(d.trend, trendX, 9);
 
     /* linha verde dividindo o cabeçalho (companhia + voo) da rota: fica no
