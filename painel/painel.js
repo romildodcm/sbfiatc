@@ -43,7 +43,15 @@
 
   var W = 128, H = 64;              // 320 × 160 mm em P2.5
   var PAGE_MS = 30000;              // cada voo fica 30 s na tela
-  var LOGO_W = 30, LOGO_H = 27;     // logo, em LEDs
+  /* logo, em LEDs: 42 colunas, 14:9 — proporção larga que casa com as logos
+     wide (wordmark da JetSmart 4.3:1, Azul 3.4:1). O logotipo grande cabe nas
+     3 primeiras linhas do cabeçalho. */
+  var LOGO_W = 42, LOGO_H = 27;
+  var LOGO_GAP = 2;                 // LEDs livres entre a logo e o texto
+  /* x do texto do cabeçalho, depois do respiro. Com 84 px livres, a rota no
+     máximo ("2/12 FM IGU -> SAO PAULO", 86) perde só a última letra; com nível
+     de voo, a linha se ajusta sem encostar nele. */
+  var LOGO_TEXT_X = LOGO_W + LOGO_GAP;
 
   /* ------------------------------------------------------------------ */
   /* Constantes de dados                                                 */
@@ -977,7 +985,7 @@
     return urls;
   }
 
-  /* PNG transparente -> recorte pelo alpha -> 30 x 27 LEDs. Devolve null
+  /* PNG transparente -> recorte pelo alpha -> LOGO_W x LOGO_H LEDs. Devolve null
      quando não há o que desenhar (imagem vazia, letreiro, canvas sem CORS). */
   function quantizeLogo(img) {
     try {
@@ -1014,7 +1022,7 @@
 
       /* 3) todo recorte é desenhado proporcionalmente: largura limitada a
             LOGO_W e altura a LOGO_H. Wordmark da JetSmart (4.3:1) e da Azul
-            (3.4:1) cabem em 30 x 7 LEDs. O corte por proporção que havia
+            (3.4:1) cabem em 36 x 9 LEDs. O corte por proporção que havia
             aqui (> 2.2) rejeitava todas as logos do CDN, caindo na sigla. */
 
       /* 4) desenha o recorte, mantendo a proporção, no bloco de LEDs */
@@ -1145,6 +1153,10 @@
   ];
   var ROUTE_MARK = '\u0000';
   var ROUTE_ARROW_W = 8;
+  /* LEDs livres de cada lado da seta, entre ela e o código do aeroporto.
+     Ficava 1 (de cada lado); a linha da rota ganhou 2 colunas de respiro
+     para a direita com 0. */
+  var ROUTE_GAP = 0;
 
   /* largura da rota com a seta dedicada no lugar de '-' + '>' */
   function routeWidth(str) {
@@ -1152,8 +1164,8 @@
     var w = 0;
     for (var i = 0; i < s.length; i++) {
       var ch = s.charAt(i);
-      /* a seta ocupa o marcador e o respiro que vem depois dele */
-      w += ch === ROUTE_MARK ? ROUTE_ARROW_W + 1 : advanceOf(ch);
+      /* a seta ocupa o marcador e os dois respiros que a cercam */
+      w += ch === ROUTE_MARK ? ROUTE_ARROW_W + 2 * ROUTE_GAP : advanceOf(ch);
     }
     return w - 1;
   }
@@ -1162,6 +1174,12 @@
   function textRoute(x, y, str, maxPx, c) {
     var s = normalizeText(str);
     while (s.length > 2 && routeWidth(s) > maxPx) s = s.slice(0, -1);
+
+    /* a seta é desenhada com 1 LED de respiro de cada lado (o código termina
+       no sprite, que inclui a coluna de avanço); com ROUTE_GAP = 0 a rota
+       leva 2 colunas a menos do que o routeWidth diz, e o corte abre espaço
+       para 2 letras a mais. Assim a rota desenhada nunca passa de maxPx. */
+    var desenho = ROUTE_GAP - 1;
 
     var cx = x;
     for (var i = 0; i < s.length; i++) {
@@ -1172,7 +1190,7 @@
             if (ROUTE_ARROW[row].charAt(col) === '#') px(cx + col, y + row, c);
           }
         }
-        cx += ROUTE_ARROW_W + 1;
+        cx += ROUTE_ARROW_W + desenho;
         continue;
       }
       text(cx, y, ch, c, 1);
@@ -1215,8 +1233,9 @@
     return kmText(d.a.d) + ' KM FROM ' + truncate(centerCode(), 6);
   }
 
-  /* Layout do painel da foto:
-       [logo 30x27] COMPANHIA
+  /* Layout do painel da foto (logo alargada: ocupa as 3 primeiras linhas
+     e empurra o texto do cabeçalho para a direita):
+       [logo 42x27]  COMPANHIA    (LOGO_GAP: 2 LEDs livres entre os dois)
                     VOO        ↗/↘ (tendencia, fim da 2a linha)
                     ────────── linha verde
                     ORG -> DST
@@ -1229,7 +1248,8 @@
 
     /* o espaço do logo é sempre reservado, para o texto não pular de lugar
        entre um voo e outro. A logo desce 1 LED para ficar centrada no bloco
-       das 3 primeiras linhas (companhia 0..6, voo 9..15, rota 23..29). */
+       das 3 primeiras linhas (companhia 0..6, voo 9..15, rota 23..29). A
+       logo tem LOGO_W LEDs e o texto do cabeçalho começa em LOGO_TEXT_X. */
     var logoY = 1;
     if (logoPx) {
       for (var y = 0; y < LOGO_H; y++) {
@@ -1249,8 +1269,17 @@
       text(Math.round((LOGO_W - textWidth(sigla, 1)) / 2), logoY + 10, sigla, C.white);
     }
 
-    var tx = LOGO_W + 4;
-    var folga = 15;
+    /* o cabeçalho (companhia, voo, rota) começa depois da logo + LOGO_GAP
+       LEDs de respiro. Os cortes abaixo são por largura (não por número de
+       letras), para nada encostar na tendência ou no nível de voo.
+       A linha da rota é composta na ordem rota -> FL, então o que fica sem
+       espaço é o nível de voo: ele cede antes de a rota perder a última
+       letra do destino. */
+    var tx = LOGO_TEXT_X;
+
+    /* folga em caracteres do nome da companhia: o que sobra até a borda,
+       em incrementos de 6 px (1 letra + 1 de respiro) */
+    var folga = Math.max(0, Math.floor((W - 1 - tx + 1) / 6));
 
     /* a seta de tendencia (↗ subindo, ↘ descendo; nada em "level" ou sem
        dado) fecha a 2a linha do painel, a do numero do voo, com 1 LED de
@@ -1259,9 +1288,28 @@
     var trendW = arrowOf(d.trend) ? ARROW_W - 1 : 0;
     var trendX = W - trendW - 1;
     var vooMax = Math.floor((trendX - (trendW ? 2 : 0) - tx + 1) / 6);
+    /* o nível de voo fecha a linha da rota, à direita, e é sempre mostrado:
+       a rota é que cede espaço para ele. Com 2 px de vão livre entre os dois
+       e o nível de voo inteiro (FL046, 3 letras): a rota é cortada pelo
+       destino quando não cabe, em vez de o FL sumir. */
+    var lvl = levelOf(d);
+    var lvlW = lvl ? textWidth(lvl, 1) : 0;
+    var lvlGap = lvl ? 2 : 0;
+    var rotaMax = W - tx - 2 - (lvl ? lvlW + lvlGap : 0);
 
     text(tx, 0, truncate(airlineName(d), folga), C.white);
-    text(tx, 9, truncate(d.flight, trendW ? vooMax : folga), C.white);
+
+    /* a 2a linha é o voo; com "FM ORG ADSB" (origem informada só pela
+       aeronave) o nome da estação entra junto, e é ele que cede quando não
+       cabe — o número do voo nunca é cortado. " FM " + 5 de respiro = 12 px
+       reservados. */
+    var voo = truncate(d.flight, trendW ? vooMax : folga);
+    var fm = '';
+    if (d.fromCallsign && d.a.adbdbOrigin) {
+      var fmMax = rotaMax - textWidth(voo, 1) - 12;
+      if (fmMax > 5) fm = ' FM ' + truncateToWidth(d.a.adbdbOrigin, fmMax);
+    }
+    text(tx, 9, voo + fm, C.white);
     if (trendW) drawTrend(d.trend, trendX, 9);
 
     /* linha verde dividindo o cabeçalho (companhia + voo) da rota: fica no
@@ -1277,12 +1325,10 @@
     var dst = d.destination ? codeOf(d.destination) : '';
     var rota = (org ? org + ' ' : '') + '\u0000' + ' ' + (dst || '?');
 
-    /* o nivel de voo fecha a linha da rota, a direita */
-    var lvl = levelOf(d);
-    var lvlW = lvl ? textWidth(lvl, 1) : 0;
-
-    textRoute(tx, 23, rota, W - tx - lvlW - 2, C.cyan);
-    if (lvl) textRight(W, 23, lvl, C.cyan);
+    textRoute(tx, 23, rota, rotaMax, C.cyan);
+    /* o nível de voo encosta na borda direita: textRight já recua 1 LED da
+       borda que recebe, então W + 1 deixa o último LED do FL na coluna 127 */
+    if (lvl) textRight(W + 1, 23, lvl, C.cyan);
 
     /* da rota para baixo, espacamento uniforme de 4 LEDs entre as linhas:
        rota 23..29, modelo 34..40, DEP/ETA 45..51, distancia 56..62 */

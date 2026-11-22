@@ -1,5 +1,5 @@
 // Service Worker para controle de cache - Versão Anti-Cache para Streams
-const CACHE_NAME = 'sbfi-atc-v20';
+const CACHE_NAME = 'sbfi-atc-v21';
 const STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
 // Recursos locais estáticos
@@ -16,6 +16,13 @@ const STATIC_RESOURCES = [
   '/radio-analytics.js',
   '/radio-recorder.js',
   '/radio-waveform.js',
+  // Impede a tela de apagar (TV / Fire Stick): script + vídeo mudo em loop.
+  // Fica no cache para o vídeo existir mesmo offline — sem ele, o navegador
+  // da TV volta a deixar a tela dormir.
+  '/keep-awake.js',
+  '/keep-awake.mp4',
+  '/keep-awake-mute.mp4',
+  '/keep-awake-loop.mp4',
   '/favicon/android-chrome-512x512.png',
   '/favicon/apple-touch-icon.png',
   '/favicon/favicon-32x32.png',
@@ -130,5 +137,30 @@ self.addEventListener('activate', (event) => {
           .map(name => caches.delete(name))
       )
     ).then(() => self.clients.claim())
+  );
+});
+
+// O keep-awake.js troca o <source> do vídeo quando o navegador recusa a
+// variante anterior. Responde usando a MESMA URL (sem redirecionar) e sempre
+// com o Content-Type de MP4: navegador antigo recusa o vídeo quando a resposta
+// chega como text/html ou octet-stream (caso do Pages sem MIME configurado).
+const KEEP_AWAKE_VIDEO = /\/keep-awake(?:-[a-z]+)?\.mp4$/;
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const pathname = new URL(request.url).pathname;
+  if (request.method !== 'GET' || !KEEP_AWAKE_VIDEO.test(pathname)) return;
+
+  event.respondWith(
+    caches.match(request, { ignoreSearch: true })
+      .then((cached) => cached || fetch(request))
+      .then((response) => {
+        if (!response || !response.ok) return response;
+        return new Response(response.body, {
+          status: 200,
+          statusText: 'OK',
+          headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-cache' },
+        });
+      })
   );
 });
