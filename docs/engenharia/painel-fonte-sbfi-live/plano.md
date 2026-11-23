@@ -27,7 +27,7 @@ tela exatamente o mesmo**, e eliminar do navegador a regra de negócio que agora
 | `cardData()` (origem/destino, ETA, DEP, km), `rowsOf()`, `orderedFlights()`, `buildScreens()` | 858–957 | **Sai** (ordem e corte são do servidor) |
 | Logo: `logoUrls`, `quantizeLogo` (canvas 40×27), `ensureLogo` | 959–1106 | **Sai** (vira `logos[key].bitmap`) |
 | `airlineName()` (tabela `AIRLINES`), `levelOf()`, `kmText()`, `distLine()` | 1112–1236 | **Sai** (vêm `airlineName`, `levelText`, `distText`) |
-| Configurações (e-mail/senha, `btnClearKey`, `updateCfgStatus` com token) | 1495–1567 | **Sai** do formulário; painel volta a ser público |
+| Configurações (e-mail/senha, `saveCreds`/`loadCreds`, `btnClearKey`, `openCfg`, `updateCfgStatus` com token, `setAlert`) | 1495–1567, 1435–1449 | **Vira tela "Informações"**, só leitura (ver 3.8) — não há mais nada para configurar |
 | Demo com dados falsos (`DEMO`, `demoFlight`, `applyDemo`) | 1779–2149 | **Reescreve** para payloads `SbfiLiveResponse` |
 | Desenho: `drawFlight`, `drawEmpty`, `drawError`, `ROUTE_ARROW`, `textRoute`, `drawTrend`, `FONT`, `px`, `fit` | 98–349, 1108–1429, 1756–1777 | **Fica** — nenhuma coordenada muda |
 
@@ -44,9 +44,12 @@ tela exatamente o mesmo**, e eliminar do navegador a regra de negócio que agora
   `tick()`, `draw()`, `drawFlight()`, `drawEmpty()`, `drawError()`, `nextScreen()`,
   `screenText()`.
 - `painel/index.html`: adicionar `<script src="/painel/painel-live.js" defer>` antes de
-  `painel.js`; remover os campos de e-mail/senha do bloco de Configurações (o layout do
-  **painel** não muda; o overlay de Configurações perde os campos e mantém "Como usar",
-  status e crédito).
+  `painel.js`; o overlay de **Configurações vira a tela "Informações"** (só leitura) —
+  saem o formulário e todos os controles de escrita (form, e-mail, senha, olho da senha,
+  botões "entrar"/"limpar"), ver decisão 3.8. O layout do **painel** (LED) não muda.
+- `painel/painel.css`: neutralizar as regras que só existiam para o formulário
+  (`.cfg-grid + .cfg-grid`, `.field*`, `.pw*`, `.cfg-actions` com `btn`) — o painel de LED
+  não usa nenhuma delas.
 - `sw.js`: incluir `/painel/painel-live.js` em `STATIC_RESOURCES` e subir `CACHE_NAME` para
   `sbfi-atc-v22`.
 - Modo demo (`?demo=`) migrado para payloads reais do endpoint, com novos cenários
@@ -114,7 +117,7 @@ painel.js  state.live = PainelLive.getState()
    mantém a pausa em `document.hidden` e o refresh imediato no `visibilitychange`.
 
 4. **`stale` e falha de rede não apagam a tela.** Com `stale: true`, segue exibindo a última
-   rodada boa; o status de Configurações mostra `STALE 42s`. Falha de rede/`429` mantém a
+   rodada boa; a linha de estado da tela de Informações mostra `STALE 42s`. Falha de rede/`429` mantém a
    última rodada; sem nunca ter tido resposta, `drawError()` desenha `STANDBY` (fase de
    boot) e depois `NO SIGNAL` / `API / NET`, com `TOO MANY TRIES` / `AGUARDE` no `429` —
    textos client-side só para os três casos de tela sem dados, como hoje.
@@ -133,6 +136,27 @@ painel.js  state.live = PainelLive.getState()
 7. **Dependência nova:** nenhuma. O módulo é ES5/UMD (`window.PainelLive`) para carregar por
    `<script>` como o resto da página, e testável no Node via import dinâmico do globo.
 
+8. **Configurações vira "Informações" — só leitura.** O painel não tem mais nada para o
+   operador ajustar: não há login (endpoint público), não há endereço de API
+   (`DEFAULT_API` fixo continua valendo, com `?api=` apenas para dev), não há rotação nem
+   aeroporto para escolher. O overlay perde o formulário inteiro e passa a ser uma tela
+   descritiva, sem nenhum controle que escreva estado:
+   - **Título** `INFORMAÇÕES` (o título `Configurações` sai da tela; o `aria-label` do botão
+     passa de "Configurações" para "Informações").
+   - **Bloco "Dados ao vivo"** — valores preenchidos por `renderInfo()` a cada atualização,
+     como texto (`<dl>` ou linhas de status, não inputs): fonte `GET /api/sbfi/live` +
+     `state.apiBase`; aeroporto `SBFI · IGU · Foz do Iguaçu` (`airport`); janela
+     `10 min` (`windowMinutes`); rodada `3 telas · 30 s/tela` (`rotation`); última leitura
+     `hh:mm:ss UTC` (`generatedAt`); estado `OK` / `STALE 42 s` / `SEM SINAL` / `429`;
+     tela atual `2/3`.
+   - **Bloco "Como usar"** — o texto atual, menos a linha de login; permanece a operação de
+     tela (scroll, clique para copiar, setas, play, gravar).
+   - **Rodapé** — crédito `romildo.net`, como hoje. Os atalhos de teclado (setas, `Esc`,
+     clique no painel) não mudam.
+   - `setAlert()` e o `#alertBox` de erro de login saem; o estado de falha passa a ser uma
+     linha dentro de "Dados ao vivo". Nenhum `localStorage` de credenciais
+     (`sbfiPainelApi` é removido no primeiro load).
+
 ## Decomposição em Tarefas
 
 1. **[Story] Cliente `painel-live.js` + teste de contrato**
@@ -150,9 +174,10 @@ painel.js  state.live = PainelLive.getState()
    - Descrição: remover login/ADSBDB/`normalizeLive`/`cardData`/`enrich`/caches; `refresh()`
      passa a chamar `PainelLive.load()`; `state.live` substitui `state.aircraft`/`screens`;
      `tick()` usa `state.live.pageSeconds`; remover chaves antigas do `localStorage`.
-   - Critérios de aceite: [ ] `grep` não encontra `login(`, `adsbdb`, `aircraft/live`;
-     [ ] refresh a cada 10 s, página a cada 30 s; [ ] sem chamadas com `Authorization`;
-     [ ] `?debug=1` loga `GET /api/sbfi/live`, `screens: n`, `stale`.
+   - Critérios de aceite: [ ] `grep` não encontra `login(`, `adsbdb`, `aircraft/live`,
+     `saveCreds`, `state.email`, `state.password`, `state.token`; [ ] refresh a cada 10 s,
+     página a cada 30 s; [ ] sem chamadas com `Authorization`; [ ] `?debug=1` loga
+     `GET /api/sbfi/live`, `screens: n`, `stale`.
    - Depende de: 1
 
 3. **[Task] Desenho por campos do endpoint, sem mover um pixel**
@@ -180,29 +205,38 @@ painel.js  state.live = PainelLive.getState()
 5. **[Task] Error/empty/429/stale no painel**
    - Descrição: `drawError()` distingue boot (`STANDBY`), `429` (`TOO MANY TRIES` +
      `AGUARDE`), rede (`NO SIGNAL` + `API / NET`) e tela `error` do servidor (`lines`);
-     `stale` não troca a rodada e atualiza `updateCfgStatus()` com `STALE <n>s`.
-   - Critérios de aceite: [ ] `?demo=stale` mantém o voo na tela com aviso no status;
-     [ ] `?demo=err-rate` mostra `TOO MANY TRIES`; [ ] `?demo=empty` mostra
+     `stale` não troca a rodada e aparece como linha `STALE <n>s` na tela de Informações.
+   - Critérios de aceite: [ ] `?demo=stale` mantém o voo na tela com aviso na tela de
+     Informações; [ ] `?demo=err-rate` mostra `TOO MANY TRIES`; [ ] `?demo=empty` mostra
      `IGU / IGR / AGT` / `NO FLIGHTS` / `NO TRAFFIC` + relógio UTC.
    - Depende de: 3
 
-6. **[Task] Configurações sem credenciais + HTML/SW/versão**
-   - Descrição: overlay perde e-mail/senha e o botão "limpar"; `cfgStatus` mostra API,
-     estação, telas, última leitura, `stale`, `windowMinutes`; `index.html` carrega
-     `painel-live.js`; `sw.js` caches o novo arquivo e sobe `CACHE_NAME`; atualizar
-     comentário de cabeçalho do `painel.js`.
-   - Critérios de aceite: [ ] Abrir `/painel` num navegador limpo renderiza sem interação;
-     [ ] `sw.js` v22 com `/painel/painel-live.js`; [ ] Nenhum campo de senha no DOM.
+6. **[Task] Tela "Informações" (configurações vira só leitura) + HTML/SW/versão**
+   - Descrição: **remover de vez o login e tudo que existe para configurar** — formulário
+     (`#cfgForm`, `#email`, `#password`, `#btnTogglePw`, botões "entrar"/"limpar"),
+     `saveCreds`/`loadCreds`/`LS_KEY`, `openCfg` com foco em input, `updateCfgStatus` com
+     usuário/token e `setAlert`/`#alertBox`; criar `renderInfo()` que abastece o overlay
+     somente-leitura com os dados de `state.live` (fonte, aeroporto, janela, rodada, última
+     leitura, estado `OK`/`STALE`/`SEM SINAL`/`429`, tela atual) por decisão 3.8; `index.html`
+     com `<title>`/`aria-label` "Informações" e sem `<form>`; `painel.css` limpo das regras
+     de campo; carregar `painel-live.js`; `sw.js` inclui o arquivo e sobe `CACHE_NAME` para
+     `sbfi-atc-v22`; atualizar comentário de cabeçalho do `painel.js`.
+   - Critérios de aceite: [ ] Abrir `/painel` num navegador limpo renderiza sem interação e
+     sem nenhum prompt de credencial; [ ] `grep -iE "senha|password|token|Authorization|
+     email"` não retorna nada em `painel/`; [ ] Nenhum `<input>`/`<form>` nem botão de
+     escrita no DOM; [ ] Overlay mostra fonte, aeroporto, janela, rodada, última leitura e
+     estado, atualizando a cada refresh; [ ] `sw.js` v22 com `/painel/painel-live.js`.
    - Depende de: 5
 
 7. **[Task] Modo demo com payloads reais + docs**
    - Descrição: substituir `DEMO` por fixtures no formato `SbfiLiveResponse` (cenários
      acima + `stale`), mantendo a barra de cenários; atualizar
      `docs/prompt-layout-painel.md` (fonte = `GET /api/sbfi/live`) e criar
-     `docs/engenharia/painel-fonte-sbfi-live/README.md` com o mapeamento campo → linha.
+     `docs/engenharia/painel-fonte-sbfi-live/README.md` com o mapeamento campo → linha e com
+     a nota de que a tela de Configurações deixa de existir como configuração.
    - Critérios de aceite: [ ] Todos os cenários do demo carregam somente de fixture, sem
      rede; [ ] Documentação aponta o endpoint e o contrato.
-   - Depende de: 5
+   - Depende de: 6
 
 ## Riscos e Mitigações
 
@@ -213,7 +247,8 @@ painel.js  state.live = PainelLive.getState()
 | **`bitmap` com tamanho/proporção diferente de 40 × 27** — endpoint devolveu `logos: {}` nas capturas | Decodificador aceita `width`/`height` do DTO e escala para o bloco com `px()`; validar com payload real de voo antes do merge |
 | **`positionText`/`distText` nulos ou vazios** | Desenhar só quando não vazios, como hoje (`pos && posW`) |
 | **Truncamento diferente do servidor** (ex.: nome 15 chars onde hoje cai para 14) | Os cortes existentes continuam aplicados; comparar screenshots |
-| **`stale` prolongado esconde operação real** | Exibir `STALE <n>s` no status e relógio UTC na tela de erro não muda (regra do servidor) |
+| **`stale` prolongado esconde operação real** | Exibir `STALE <n>s` na tela de Informações e relógio UTC na tela de erro não muda (regra do servidor) |
+| **Operador procura o login na tela de Informações** (savia antiga) | Overlay descreve a fonte (`GET /api/sbfi/live · público`) e o estado ao vivo; não há mais nada para configurar |
 | **Rate limit**: 1 requisição/10 s por display | Intervalo = `max-age` do servidor; `Retry-After` respeitado no `429` |
 
 ## Definition of Done
@@ -222,6 +257,9 @@ painel.js  state.live = PainelLive.getState()
       screenshot em todos os cenários do demo).
 - [ ] Nenhum request do painel para `adsbdb`, `/airlines/`, `pics.avs.io` ou
       `/api/aircraft/live`; única chamada de dados é `GET /api/sbfi/live`.
+- [ ] **Configurações não existe mais como configuração**: a tela é "Informações", só
+      leitura, sem `input`/`form`/botões de escrita e sem nenhuma referência a login,
+      senha ou token.
 - [ ] Fonia, tela cheia, copiar e demo funcionando.
 - [ ] `node --test tests/` verde.
 - [ ] `sw.js` v22 e `painel-live.js` no cache estático.
