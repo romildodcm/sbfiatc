@@ -15,6 +15,7 @@
   --ink-dim: #7b7568;
   --line: #22201c;
   --amber: #ffb14d;
+  --green: #3cff78;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -266,91 +267,6 @@ body {
   margin-bottom: 16px;
 }
 
-.field.full { grid-column: 1 / -1; }
-
-/* espaco entre os blocos de campo (endereco / credenciais) */
-.cfg-grid + .cfg-grid { margin-top: 16px; }
-
-.overlay .cfg { width: min(660px, 100%); }
-
-.cfg-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-
-.field span {
-  font-size: 9px;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-}
-
-.field input,
-.field select {
-  font-family: inherit;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-  color: var(--ink);
-  background: #050506;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px 10px;
-  width: 100%;
-  min-width: 0;
-  outline: none;
-  font-variant-numeric: tabular-nums;
-  appearance: none;
-}
-
-.field select {
-  background-image: linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%),
-                    linear-gradient(135deg, var(--ink-dim) 50%, transparent 50%);
-  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-  padding-right: 26px;
-}
-
-.field input:focus,
-.field select:focus {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 2px rgba(255, 177, 77, 0.12);
-}
-
-.field input[type="number"] { -moz-appearance: textfield; }
-.field input[type="number"]::-webkit-outer-spin-button,
-.field input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.field input::placeholder { color: #3a3733; }
-
-.presets {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-  margin: 14px 0;
-}
-
-.chip {
-  font-family: inherit;
-  font-size: 9.5px;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  background: transparent;
-  border: 1px dashed var(--line);
-  border-radius: 999px;
-  padding: 5px 11px;
-  cursor: pointer;
-}
-
-.chip:hover { color: var(--amber); border-color: #3a3630; }
-
 .cfg-actions {
   display: flex;
   gap: 8px;
@@ -373,71 +289,38 @@ body {
 
 .btn:hover { border-color: #3a3630; background: rgba(255, 255, 255, 0.03); }
 
-.btn.primary {
-  background: var(--amber);
-  color: #171002;
-  border-color: var(--amber);
-  font-weight: 700;
+/* lista de pares rótulo/valor da tela de Informações (só leitura) */
+.info-list {
+  margin: 0;
+  display: grid;
+  gap: 6px;
 }
 
-.cfg-adv {
-  margin-top: 16px;
-  border-top: 1px dashed var(--line);
-  padding-top: 10px;
+.info-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 10px;
+  align-items: baseline;
 }
 
-.cfg-adv summary {
+.info-row dt {
   font-size: 9px;
-  letter-spacing: 1.8px;
+  letter-spacing: 1.6px;
   text-transform: uppercase;
   color: var(--ink-dim);
-  cursor: pointer;
-  list-style: none;
 }
 
-.cfg-adv summary::-webkit-details-marker { display: none; }
-.cfg-adv summary::before { content: "▸ "; }
-.cfg-adv[open] summary::before { content: "▾ "; }
-
-.cfg-adv .cfg-grid { margin-top: 10px; }
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 10px;
+.info-row dd {
+  margin: 0;
+  font-size: 11px;
   letter-spacing: 0.4px;
-  color: var(--ink-dim);
-  cursor: pointer;
+  color: var(--ink);
+  word-break: break-word;
 }
 
-.check input { accent-color: var(--amber); width: 14px; height: 14px; }
-
-.cfg-status {
-  white-space: pre-line;
-  margin-top: 16px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-  font-size: 9.5px;
-  line-height: 1.9;
-  letter-spacing: 0.6px;
-  color: #55504a;
-}
-
-.cfg-alert {
-  display: none;
-  margin-top: 10px;
-  padding: 8px 10px;
-  border: 1px solid #7a2b23;
-  border-radius: 6px;
-  color: #ff8a7a;
-  background: rgba(255, 91, 74, 0.07);
-  font-size: 10px;
-  line-height: 1.6;
-}
-
-.cfg-alert.show { display: block; }
+.info-status { color: var(--green, #3cff78); }
+.info-status.stale { color: var(--amber); }
+.info-status.bad { color: #ff8a7a; }
 
 /* ========== RESPONSIVO ========== */
 @media (max-width: 520px) {
@@ -500,41 +383,6 @@ body {
 }
 
 .cfg-credit a:hover { border-bottom-style: solid; }
-
-/* ========== CAMPO DE SENHA COM OLHO ========== */
-.pw {
-  position: relative;
-  display: block;
-}
-
-.pw input { padding-right: 34px; }
-
-.pw-eye {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-  transform: translateY(-50%);
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #55504a;
-  cursor: pointer;
-}
-
-.pw-eye:hover { color: var(--ink-dim); background: rgba(255, 255, 255, 0.04); }
-.pw-eye:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px; }
-.pw-eye svg { width: 15px; height: 15px; }
-
-/* o icone do "olho riscado" so aparece quando a senha esta visivel */
-.pw-eye .i-eye-off { display: none; }
-.pw-eye.on .i-eye { display: none; }
-.pw-eye.on .i-eye-off { display: block; }
-.pw-eye.on { color: var(--amber); }
 
 /* ========== TELA CHEIA ========== */
 #btnFull .i-exit { display: none; }

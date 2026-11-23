@@ -3,24 +3,25 @@
 
    A página é preta; no meio dela fica o painel. Tudo é desenhado num buffer
    de 128 × 64 pixels (1 pixel = 1 LED), com fonte própria de 5 × 7 para o
-   texto sair realmente em matriz de pontos. As telas se alternam:
+   texto sair realmente em matriz de pontos. As telas se alternam na ordem
+   que o servidor manda (chegadas, partidas e sobrevoos), cada uma com o
+   layout do painel da foto: logo, companhia, voo, rota, modelo, DEP/ETA e
+   km até o destino.
 
-     CHEGADAS (páginas de 5 voos) -> PARTIDAS (idem) -> DESTAQUE (o próximo
-     voo, no layout do painel da foto: logo, companhia, voo, rota, modelo,
-     DEP/ETA e km até o destino).
-
-   Fontes de dados:
-   - posição/velocidade/altitude: OpenSky (/states/all) — não tem rota.
-   - rota, companhia e modelo: ADSBDB (/callsign, /aircraft), com cache local.
-   - logo: /airlines/{ICAO}.png do AirGateway.Api; sem arquivo, CDN por IATA;
-     sem nenhum dos dois, sigla em caixa de 30 × 27 LEDs.
+   Fonte de dados — e só ela: GET /api/sbfi/live do AirGateway.Api (operação
+   SbfiLive), público, sem login e sem query string. O servidor entrega as
+   telas prontas, na ordem, com os textos truncados para as 128 × 64 LEDs e
+   os logos já quantizados; este arquivo não calcula rota, ETA, nível de
+   voo nem baixa logo — só renderiza o que chegou (o cliente é o
+   /painel/painel-live.js). A tela de Informações também lê desse estado.
 
    Página secundária e oculta: não é linkada em lugar nenhum do site.
 
-   Ajuste visual sem API nem login: /painel/?demo=<cenário> congela o painel
-   num cenário de dados falsos (arrival, departure, overflight, unknown, multi,
-   empty, trend, err-login, err-auth, err-rate, err-net). A barra inferior troca de cenário
-   e as setas ← → trocam de tela. Sem o parâmetro, o modo demo não executa.
+   Ajuste visual sem rede: /painel/?demo=<cenário> congela o painel num
+   cenário de fixtures do próprio endpoint (arrival, departure, overflight,
+   unknown, multi, trend, empty, stale, err-signal, err-rate, err-net). A
+   barra inferior troca de cenário e as setas ← → trocam de tela. Sem o
+   parâmetro, o modo demo não executa.
    ========================================================================== */
 (function () {
   'use strict';
@@ -42,58 +43,49 @@
   /* ------------------------------------------------------------------ */
 
   var W = 128, H = 64;              // 320 × 160 mm em P2.5
-  var PAGE_MS = 30000;              // cada voo fica 30 s na tela
-  /* logo, em LEDs: 40 colunas, ~1.5:1 — proporção larga que casa com as logos
-     wide (wordmark da JetSmart 4.3:1, Azul 3.4:1). O logotipo grande cabe nas
-     3 primeiras linhas do cabeçalho. */
-  var LOGO_W = 40, LOGO_H = 27;
+  var PAGE_MS = 30000;              // fallback quando o servidor não diz mais
+  /* logo, em LEDs: 31 × 31 — altura idêntica ao bloco do cabeçalho (0..30).
+     O bitmap do backend (36 × 36) é reduzido para 31 × 31 pelo min() do
+     drawLogo, sem distorcer. */
+  var LOGO_W = 31, LOGO_H = 31;
   var LOGO_GAP = 4;                 // LEDs livres entre a logo e o texto
-  /* x do texto do cabeçalho, depois do respiro (44). Com 82 px livres, a
+  /* x do texto do cabeçalho, depois do respiro (35). Com 93 px livres, a
      rota no máximo ("2/12 FM IGU -> SAO PAULO") perde mais uma letra do
      destino; com nível de voo, a linha se ajusta sem encostar nele. */
   var LOGO_TEXT_X = LOGO_W + LOGO_GAP;
+
+  /* ritmo vertical do voo: todas as linhas com o mesmo vão, medidas de baixo
+     para cima. O vão do cabeçalho é 1 LED maior (TOP_GAP) para a régua verde
+     cair centrada. Com o glifo de 7 linhas: companhia 0..6, voo 12..18,
+     régua 21, rota 24..30, modelo 35..41, DEP/ETA 46..52, distância 57..63 —
+     a última encostada na base. */
+  var LINE_H = 7;                   // altura do glifo 5 × 7
+  var LINE_GAP = 4;                 // LEDs livres entre as linhas de texto
+  var TOP_GAP = 5;                  // vão do cabeçalho (régua centralizada)
+  var DIST_Y = H - LINE_H;                          // 57
+  var DEP_Y = DIST_Y - LINE_H - LINE_GAP;           // 46
+  var MODEL_Y = DEP_Y - LINE_H - LINE_GAP;          // 35
+  var ROUTE_Y = MODEL_Y - LINE_H - LINE_GAP;        // 24
+  var FLIGHT_Y = ROUTE_Y - LINE_H - TOP_GAP;        // 12
+  var AIRLINE_Y = FLIGHT_Y - LINE_H - TOP_GAP;      // 0
+  var RULE_Y = FLIGHT_Y + LINE_H + 2;               // 21: 2 LEDs de cada lado
 
   /* ------------------------------------------------------------------ */
   /* Constantes de dados                                                 */
   /* ------------------------------------------------------------------ */
 
-  /* AirGateway.Api: endereço fixo, sem campo em Configurações. Para apontar o
-     painel a outra instância (dev), use /painel/?api=http://host:porta. */
+  /* AirGateway.Api: endereço fixo, sem campo na tela (não há nada para
+     configurar). Para apontar o painel a outra instância (dev), use
+     /painel/?api=http://host:porta. */
   var DEFAULT_API = 'https://airgateway.iguspotters.com.br';
   var API_BASE = apiParam() || DEFAULT_API;
 
-  var ROUTE_API = 'https://api.adsbdb.com/v0';
-  var LOGO_LOCAL = '/airlines/';               // AirGateway.Api (wwwroot/airlines)
-  var LOGO_API = 'https://pics.avs.io/200/200/';
-  var ROUTE_TTL = 24 * 60 * 60 * 1000;
-  var AC_TTL = 7 * 24 * 60 * 60 * 1000;
-  var CACHE_CAP = 400;
-  var ENRICH_PER_CYCLE = 4;
-  var ENRICH_SESSION_CAP = 120;
-
-  /* cobertura do painel: os três aeroportos da tríplice fronteira
-     (só nas telas sem voo; a tela de voo usa o rodapé para fuso e rodada) */
+  /* cobertura do painel: os três aeroportos da tríplice fronteira — só como
+     último recurso, quando a tela de erro/vazio vier sem as linhas prontas */
   var AREA_LABEL = 'IGU / IGR / AGT';
 
-  var AIRLINES = {
-    GLO: { name: 'GOL', iata: 'G3' },
-    TAM: { name: 'LATAM', iata: 'LA' },
-    LTG: { name: 'LATAM', iata: 'LA' },
-    AZU: { name: 'AZUL', iata: 'AD' },
-    PTB: { name: 'VOEPASS', iata: '2Z' },
-    ONE: { name: 'VOEPASS', iata: '2Z' },
-    ARG: { name: 'AEROLINEAS', iata: 'AR' },
-    FBZ: { name: 'FLYBONDI', iata: 'FO' },
-    JSM: { name: 'JETSMART', iata: 'JA' },
-
-    /* JetSmart tem um ICAO por país (JAT Chile, JES Argentina, JAP Peru),
-       todos com IATA JA e a mesma logo. O logo aponta para a chave JSM,
-       que é a que resolve no CDN; o ICAO do callsign fica em "code" e
-       segue sendo o que aparece no placeholder. */
-    JAT: { name: 'JETSMART', iata: 'JA', logo: 'JSM' },
-    JES: { name: 'JETSMART', iata: 'JA', logo: 'JSM' },
-    JAP: { name: 'JETSMART', iata: 'JA', logo: 'JSM' }
-  };
+  /* cores de fallback para a sigla quando a companhia não traz cor */
+  var SIGLA_COLOR = [255, 246, 232];
 
   /* ------------------------------------------------------------------ */
   /* Fonte 5 × 7                                                         */
@@ -180,7 +172,6 @@
     dim: [60, 44, 18],
     dimText: [120, 100, 70]
   };
-
   /* ------------------------------------------------------------------ */
   /* Elementos                                                           */
   /* ------------------------------------------------------------------ */
@@ -197,11 +188,8 @@
 
   var el = {
     led: $('led'), glow: $('glow'), panel: $('panel'), boot: $('boot'),
-    btnCfg: $('btnCfg'), cfg: $('cfg'), cfgForm: $('cfgForm'),
-    cfgStatus: $('cfgStatus'), alertBox: $('alertBox'),
-    email: $('email'), password: $('password'),
-    btnClearKey: $('btnClearKey'),
-    btnCloseCfg: $('btnCloseCfg'),
+    btnInfo: $('btnInfo'), info: $('info'), infoStatus: $('infoStatus'),
+    btnCloseInfo: $('btnCloseInfo'),
     playBtn: $('playBtn'), player: $('radioPlayer'), btnFull: $('btnFull'),
     dockStatus: $('dockStatus'), recordLabel: $('recordLabel'), recordCounter: $('recordCounter')
   };
@@ -217,44 +205,172 @@
   /* Estado                                                              */
   /* ------------------------------------------------------------------ */
 
+  /* O painel não tem mais regra de negócio: o estado de dados É o estado do
+     cliente do endpoint (painel-live.js), consultado por liveState(). Aqui
+     ficam só a rodada em exibição, o relógio das telas e o modo demo. */
   var state = {
-    /* centro fixo: SBFI (aeroporto de Foz do Iguaçu) */
-    lat: -25.593485,
-    lon: -54.490306,
-    interval: 60,
-
-    apiBase: API_BASE,
-    email: '',
-    password: '',
-    token: '',
-    tokenExpiresAt: 0,
-    loginPending: null,
-    airportsPending: null,
-    airportId: null,          // usado quando o usuário não tem aeroporto (admin)
-    user: null,
-    airport: null,
-
-    centerName: 'SBFI',
-
-    aircraft: [],
-    depSeen: new Map(),
-    routes: {},
-    acinfo: {},
-    extraQueries: 0,
-    adsbOff: false,
-
-    lastFetchAt: 0,
-    nextFetchAt: 0,
-    inflight: false,
-    error: '',
-
-    screens: [],
     screenIndex: 0,
     lastPageAt: 0,
-    logoCache: {},
-
-    demo: ''                 // cenário de /painel/?demo=..., ver bloco "Modo demo"
+    pageMs: PAGE_MS,
+    demo: '',                 // cenário de /painel/?demo=..., ver bloco "Modo demo"
+    wantPlay: false
   };
+
+  /* cliente do GET /api/sbfi/live (trocado pelo demo quando ?demo=) */
+  var live = PainelLive.createClient({
+    apiBase: API_BASE,
+    onUpdate: function () { updateInfo(); }
+  });
+
+  function liveState() { return live.getState(); }
+
+  /* ------------------------------------------------------------------ */
+  /* Dados                                                               */
+  /* ------------------------------------------------------------------ */
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  /* horários sempre em UTC (o painel é operacional) */
+  function hhmm(d) { return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()); }
+  function hhmmss(d) {
+    return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
+  }
+
+  /* ISO -> "hh:mm" em UTC; '--:--' quando não há horário */
+  function utcClock(iso) {
+    if (!iso) return '--:--';
+    var d = new Date(iso);
+    if (!isFinite(d.getTime())) return '--:--';
+    return hhmm(d);
+  }
+
+  /* 30 s (ou pageSeconds do servidor) por tela */
+  function pageMs() {
+    var ls = liveState();
+    var secs = ls && ls.live && ls.live.rotation && ls.live.rotation.pageSeconds;
+    return (secs && secs > 0 ? secs : 30) * 1000;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Ciclo de atualização                                                */
+  /* ------------------------------------------------------------------ */
+
+  function refresh() {
+    if (state.demo) return;
+    if (document.hidden) return;
+
+    /* o voo na tela não pisca quando a rodada é atualizada: guarda o icao e
+       recoloca a tela nele depois (como o buildScreens antigo fazia) */
+    var cur = currentScreen();
+    var keep = cur && cur.type === 'flight' ? { icao: cur.icao, callsign: cur.callsign } : null;
+
+    live.load().then(function () {
+      var ls = liveState();
+      state.pageMs = pageMs();
+      if (keep) {
+        var idx = live.findScreen(keep);
+        if (idx >= 0) state.screenIndex = idx;
+      }
+      keepScreen();
+      log('GET', ls.url, '· fase', ls.phase, '· telas',
+        (ls.live && ls.live.screens.length) || 0,
+        ls.live ? (ls.live.stale ? '· STALE ' + ls.live.staleAgeSeconds + 's' : '') : '',
+        ls.error ? '· ' + ls.error : '');
+      draw();
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Telas                                                               */
+  /* ------------------------------------------------------------------ */
+
+  /* rodada em exibição: o array do servidor já vem ordenado e cortado */
+  function screens() {
+    var ls = liveState();
+    return (ls && ls.live && ls.live.screens) || [];
+  }
+
+  function currentScreen() {
+    var list = screens();
+    if (!list.length) return null;
+    if (state.screenIndex >= list.length) state.screenIndex = 0;
+    return list[state.screenIndex] || list[0];
+  }
+
+  /* A posição "montada no cliente" de antes some: o contador n/m agora é o
+     positionText do servidor. Aqui só garantimos que o índice cabe na rodada
+     nova (o voo em si é recolocado por refresh()). */
+  function keepScreen() {
+    var list = screens();
+    if (!list.length) { state.screenIndex = 0; return; }
+    if (state.screenIndex >= list.length) state.screenIndex = 0;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Logo em LEDs                                                        */
+  /* ------------------------------------------------------------------ */
+
+  /* Bitmap que o servidor já recortou e quantizou (40 × 27, RGB565): aqui só
+     desenha. Sem bitmap (companhia sem logo, ou logos ainda carregando no
+     backend) cai na caixa de LOGO_W × LOGO_H com a sigla de 3 letras. */
+  function logoOf(screen) {
+    var key = screen && screen.airline && screen.airline.logoKey;
+    return key ? live.logoFor(key) : null;
+  }
+
+  /* O bitmap chega do servidor no tamanho do bloco do painel (40 × 27) e é
+     exibido exatamente como veio: sem recorte, sem limpar fundo e sem
+     clarear. Qualquer tratamento de cor aqui seria inventar um desenho que o
+     servidor não mandou. A proporção é só uma proteção para payload fora do
+     contrato — no caso normal (40 × 27) ela desenha pixel a pixel. */
+  function drawLogo(screen, logoY) {
+    var img = logoOf(screen);
+    if (!img) return false;
+
+    var lw = img.width, lh = img.height;
+    var esc = Math.min(LOGO_W / lw, LOGO_H / lh);
+    var dw = Math.round(lw * esc), dh = Math.round(lh * esc);
+    var ox = Math.round((LOGO_W - dw) / 2);
+    var oy = Math.round((LOGO_H - dh) / 2);
+
+    for (var y = 0; y < dh; y++) {
+      var sy = Math.min(lh - 1, Math.floor(y / esc));
+      for (var x = 0; x < dw; x++) {
+        var sx = Math.min(lw - 1, Math.floor(x / esc));
+        var i = (sy * lw + sx) * 4;
+        if (img.rgba[i + 3] < 24) continue;
+        px(ox + x, oy + y + logoY, [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]]);
+      }
+    }
+    return true;
+  }
+
+  function drawSigla(screen, logoY) {
+    var air = (screen && screen.airline) || {};
+    var col = colorOf(air.color) || SIGLA_COLOR;
+
+    for (var i = 0; i < LOGO_W; i++) {
+      px(i, logoY, col); px(i, logoY + LOGO_H - 1, col);
+    }
+    for (var j = 0; j < LOGO_H; j++) {
+      px(0, j + logoY, col); px(LOGO_W - 1, j + logoY, col);
+    }
+    var sigla = normalizeText(screen && (screen.badgeText ||
+      (screen.airline && (screen.airline.iata || screen.airline.code)) || '?')).slice(0, 3);
+    if (!sigla) sigla = '?';
+    /* o texto da sigla fica no centro vertical da caixa, qualquer que seja
+       LOGO_H */
+    text(Math.round((LOGO_W - textWidth(sigla, 1)) / 2), logoY + Math.round((LOGO_H - 7) / 2), sigla, C.white);
+  }
+
+  /* cor da companhia no DTO (string "#RRGGBB"); null mantém a sigla branca */
+  function colorOf(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return null;
+    var v = parseInt(m[1], 16);
+    return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  }
+
 
   /* ------------------------------------------------------------------ */
   /* Desenho                                                             */
@@ -349,786 +465,8 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Dados                                                               */
-  /* ------------------------------------------------------------------ */
-
-  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
-
-  /* horários sempre em UTC (o painel é operacional) */
-  function hhmm(d) { return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()); }
-  function hhmmss(d) {
-    return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
-  }
-
-  var RAD = Math.PI / 180;
-
-  function haversineKm(lat1, lon1, lat2, lon2) {
-    var R = 6371.0088;
-    var dLat = (lat2 - lat1) * RAD;
-    var dLon = (lon2 - lon1) * RAD;
-    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * RAD) * Math.cos(lat2 * RAD) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-  }
-
-  function fmtDist(km) {
-    if (km == null || !isFinite(km)) return '—';
-    return String(Math.round(km));
-  }
-
-  function fmtAltFt(a) {
-    if (a.onGround) return 'SOLO';
-    if (a.alt == null) return '—';
-    var ft = a.alt * 3.28084;
-    if (ft < 1000) return String(Math.round(ft / 10) * 10);
-    return String(Math.round(ft / 100) * 100);
-  }
-
-  function fmtKm(km) {
-    if (km == null || !isFinite(km)) return '—';
-    return Math.round(km).toLocaleString('pt-BR');
-  }
-
-  function hueFromString(s) {
-    var h = 0;
-    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-    return h;
-  }
-
-  function hsl(h, s, l) {
-    h /= 360; s /= 100; l /= 100;
-    var r, g, b;
-    if (s === 0) { r = g = b = l; }
-    else {
-      var hue2rgb = function (p, q, t) {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1 / 6) return p + (q - p) * 6 * t;
-        if (t < 1 / 2) return q;
-        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-        return p;
-      };
-      var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-      var p = 2 * l - q;
-      r = hue2rgb(p, q, h + 1 / 3);
-      g = hue2rgb(p, q, h);
-      b = hue2rgb(p, q, h - 1 / 3);
-    }
-    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* AirGateway API (login JWT + aeronaves ao vivo)                      */
-  /* ------------------------------------------------------------------ */
-
-  function apiUrl(path) {
-    return String(state.apiBase || DEFAULT_API).replace(/\/+$/, '') + path;
-  }
-
-  /* Mensagens fixas do login. O backend responde 401 para usuário inexistente,
-     senha errada e usuário inativo — e o painel repete a mesma mensagem
-     genérica, para não dizer se a conta existe. */
-  var AUTH_FAIL_MSG = 'E-mail, usuário ou senha inválidos';
-  var AUTH_RATE_MSG = 'Muitas tentativas, aguarde um minuto';
-
-  /* e-mail OU username + senha → access token (30 min); renova sozinho quando
-     expira. O payload NAO muda: o identificador (com @ = e-mail, sem @ =
-     username, decisão do backend) vai no campo "email"; o username em
-     qualquer caixa é aceito pela API. "user.email" sempre volta como o e-mail. */
-  function login() {
-    if (!state.email || !state.password) {
-      var sem = new Error('sem credenciais');
-      sem.code = 'nocreds';
-      return Promise.reject(sem);
-    }
-    if (state.token && Date.now() < state.tokenExpiresAt - 60000) {
-      return Promise.resolve(state.token);
-    }
-    if (state.loginPending) return state.loginPending;
-
-    log('LOGIN', state.email, '→', apiUrl('/api/auth/login'));
-
-    state.loginPending = fetch(apiUrl('/api/auth/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: state.email, password: state.password })
-    }).then(function (r) {
-      if (r.status === 401) {
-        var e1 = new Error(AUTH_FAIL_MSG);
-        e1.code = 'auth';
-        throw e1;
-      }
-      if (r.status === 429) {
-        /* rate limit do login: 10 tentativas/min por IP */
-        var e429 = new Error(AUTH_RATE_MSG);
-        e429.code = 'rate';
-        throw e429;
-      }
-      if (!r.ok) {
-        var e2 = new Error('login respondeu HTTP ' + r.status);
-        e2.code = 'http';
-        throw e2;
-      }
-      return r.json();
-    }).then(function (j) {
-      state.token = j.accessToken || '';
-      state.tokenExpiresAt = Date.now() + (j.expiresIn || 1800) * 1000;
-      state.user = j.user || null;
-      state.airportId = null;      // recalculado conforme o usuário logado
-      log('LOGIN ok', (state.user && userLabel(state.user)) || '', '· token', (j.expiresIn | 0) + 's');
-      return state.token;
-    });
-
-    /* limpa o pending tanto no sucesso quanto no erro */
-    state.loginPending = state.loginPending.then(function (v) {
-      state.loginPending = null;
-      return v;
-    }, function (err) {
-      state.loginPending = null;
-      throw err;
-    });
-
-    return state.loginPending;
-  }
-
-  /* Nome exibido do usuário logado: o username (o mesmo que ele digita para
-     entrar), com o e-mail como fallback quando a conta não tem username
-     (user.username vem string | null). */
-  function userLabel(user) {
-    if (!user) return '';
-    return user.username || user.email || '';
-  }
-
-  /* Admin sem aeroporto vinculado: escolhe o primeiro aeroporto ativo e
-     manda ?airportId= (a API devolve 400 se ninguém disser o aeroporto). */
-  function resolveAirportId() {
-    if (state.airportId) return Promise.resolve(state.airportId);
-    if (state.airportsPending) return state.airportsPending;
-
-    log('GET', apiUrl('/api/airports'));
-
-    state.airportsPending = fetch(apiUrl('/api/airports'), {
-      headers: { Authorization: 'Bearer ' + state.token },
-      cache: 'no-store'
-    }).then(function (r) {
-      if (!r.ok) return [];
-      return r.json();
-    }).then(function (list) {
-      var ativos = (list || []).filter(function (a) { return a.isActive !== false; });
-      state.airportId = ativos.length ? ativos[0].id : null;
-      log('aeroporto escolhido:', state.airportId);
-      return state.airportId;
-    });
-
-    state.airportsPending = state.airportsPending.then(function (v) {
-      state.airportsPending = null;
-      return v;
-    }, function (err) {
-      state.airportsPending = null;
-      throw err;
-    });
-
-    return state.airportsPending;
-  }
-
-  /* O endereço da API é fixo (API_BASE): não há mais campo em Configurações
-     nem troca silenciosa para a origem da página, que escondia o endereço
-     onde a API estava falhando. O retry vale só para o token/sem-aeroporto. */
-  function fetchLive(retry) {
-    return login()
-      .then(function () {
-        /* a resposta do login diz se o usuário tem aeroporto vinculado */
-        return (state.user && !state.user.airport) ? resolveAirportId() : null;
-      })
-      .then(function () {
-        var url = apiUrl('/api/aircraft/live?minutes=10' +
-          (state.airportId ? '&airportId=' + state.airportId : ''));
-
-        log('GET', url);
-
-        return fetch(url, {
-          headers: { Authorization: 'Bearer ' + state.token },
-          cache: 'no-store'
-        });
-      }).then(function (r) {
-      if (r.status === 401 && !retry) {
-        state.token = '';
-        state.tokenExpiresAt = 0;
-        return fetchLive(true);
-      }
-      if (r.status === 400 && !retry) {
-        /* usuário sem vínculo: descobre o aeroporto e tenta de novo */
-        return resolveAirportId().then(function (id) {
-          if (!id) {
-            var semAp = new Error('usuário sem aeroporto vinculado');
-            semAp.code = 'airport';
-            throw semAp;
-          }
-          return fetchLive(true);
-        });
-      }
-      if (r.status === 403) {
-        var e403 = new Error('sem acesso a este aeroporto');
-        e403.code = 'auth';
-        throw e403;
-      }
-      if (!r.ok) {
-        var e = new Error('API respondeu HTTP ' + r.status);
-        e.code = 'http';
-        throw e;
-      }
-      return r.json();
-    });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* ADSBDB: rota, companhia e modelo                                    */
-  /* ------------------------------------------------------------------ */
-
-  function airportOf(p) {
-    if (!p) return null;
-    return {
-      iata: p.iata_code || '',
-      icao: p.icao_code || '',
-      city: p.municipality || '',
-      name: p.name || '',
-      lat: p.latitude == null ? null : p.latitude,
-      lon: p.longitude == null ? null : p.longitude
-    };
-  }
-
-  function fetchRoute(callsign) {
-    return fetch(ROUTE_API + '/callsign/' + encodeURIComponent(callsign), { cache: 'no-store' })
-      .then(function (r) {
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function (j) {
-        var fr = j && j.response && j.response.flightroute;
-        if (!fr) return null;
-        return {
-          airline: fr.airline ? {
-            name: fr.airline.name || '',
-            iata: fr.airline.iata || '',
-            icao: fr.airline.icao || ''
-          } : null,
-          origin: airportOf(fr.origin),
-          destination: airportOf(fr.destination),
-          t: Date.now()
-        };
-      });
-  }
-
-  function fetchAircraft(icao) {
-    return fetch(ROUTE_API + '/aircraft/' + encodeURIComponent(icao), { cache: 'no-store' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(function (j) {
-        var ac = j && j.response && j.response.aircraft;
-        if (!ac) return null;
-        return {
-          model: ac.type || '',
-          manufacturer: ac.manufacturer || '',
-          icao_type: ac.icao_type || '',
-          t: Date.now()
-        };
-      });
-  }
-
-  function routeOf(a) {
-    var r = state.routes[a.callsign];
-    return (r && !r.none) ? r : null;
-  }
-
-  function acOf(a) {
-    var x = state.acinfo[a.icao];
-    return (x && !x.none) ? x : null;
-  }
-
-  function airlineOf(a) {
-    var r = routeOf(a);
-    var cs = normalizeText(a.callsign);
-    var prefix = cs.slice(0, 3);
-    var known = AIRLINES[prefix];
-    var name = (r && r.airline && r.airline.name) || (known && known.name) || '';
-    var iata = (r && r.airline && r.airline.iata) || (known && known.iata) || '';
-    /* alias de logo: é a chave do cache, então fica dentro de AIRLINES
-       (ex.: os ICAOs da JetSmart, JAT/JES/JAP, apontam para JSM) */
-    var logo = prefix && AIRLINES[prefix] && AIRLINES[prefix].logo;
-    return {
-      code: (prefix || a.icao.slice(0, 3)).toUpperCase(),
-      logoCode: String(logo || '').toUpperCase(),
-      iata: String(iata).toUpperCase(),
-      name: name || '',
-      /* só o prefixo do callsign é ICAO de companhia; sem callsign o "code"
-         é só um pedaço do hex da aeronave e não vale pedir logo */
-      fromCallsign: !!prefix,
-      color: hsl(hueFromString(prefix || a.icao), 65, 45)
-    };
-  }
-
-  function typeOf(a) {
-    var ac = acOf(a);
-    if (!ac) return '';
-    if (ac.manufacturer && ac.icao_type) return ac.manufacturer + ' ' + ac.icao_type;
-    return ac.model || ac.icao_type || '';
-  }
-
-  function enrich(list) {
-    if (state.adsbOff) return Promise.resolve();
-    if (state.extraQueries >= ENRICH_SESSION_CAP) return Promise.resolve();
-
-    var targets = list.filter(function (a) {
-      return a.callsign && a.callsign.length >= 4 && a.callsign.indexOf('-') < 0;
-    });
-
-    var todo = targets.filter(function (a) {
-      return !state.routes[a.callsign] || !state.acinfo[a.icao];
-    }).slice(0, ENRICH_PER_CYCLE);
-
-    if (!todo.length) return Promise.resolve();
-
-    var chain = Promise.resolve();
-    todo.forEach(function (a) {
-      chain = chain.then(function () {
-        if (state.extraQueries >= ENRICH_SESSION_CAP) return;
-        var tasks = [];
-
-        if (!state.routes[a.callsign]) {
-          state.extraQueries += 1;
-          tasks.push(fetchRoute(a.callsign).then(function (r) {
-            state.routes[a.callsign] = r || { none: true, t: Date.now() };
-          }).catch(function () {
-            state.routes[a.callsign] = { none: true, t: Date.now() };
-            state.adsbOff = true;
-          }));
-        }
-
-        if (!state.acinfo[a.icao]) {
-          tasks.push(fetchAircraft(a.icao).then(function (x) {
-            state.acinfo[a.icao] = x || { none: true, t: Date.now() };
-          }).catch(function () {
-            state.acinfo[a.icao] = { none: true, t: Date.now() };
-          }));
-        }
-
-        return Promise.all(tasks);
-      });
-    });
-
-    return chain.then(saveCaches);
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Conversão da resposta da API                                        */
-  /* ------------------------------------------------------------------ */
-
-  var STATUS_KIND = {
-    approaching: 'arr',
-    departing: 'dep',
-    ground: 'ground',
-    overflight: 'over'
-  };
-
-  function normalizeLive(json) {
-    var airport = json.airport || null;
-    if (airport) {
-      state.airport = airport;
-      state.centerName = airport.icao || state.centerName;
-      state.lat = airport.latitude;
-      state.lon = airport.longitude;
-    }
-
-    var list = json.aircraft || [];
-
-    return list.map(function (x) {
-      return {
-        icao: String(x.icao24 || '').toLowerCase(),
-        callsign: String(x.callsign || '').trim() || String(x.icao24 || '').toUpperCase(),
-        country: x.country || '',
-        lat: x.latitude,
-        lon: x.longitude,
-        alt: x.altitudeFt == null ? null : x.altitudeFt / 3.28084,
-        onGround: !!x.onGround,
-        speed: x.groundSpeedKt == null ? null : x.groundSpeedKt / 1.943844,
-        track: x.track,
-        vrate: x.verticalRateFpm == null ? null : x.verticalRateFpm / 196.8504,
-        trend: trendOf(x.verticalTrend, x.verticalRateFpm),
-        d: x.distanceKm,
-        kind: STATUS_KIND[x.status] || 'over',
-        status: x.status,
-        observedAt: x.observedAt
-      };
-    });
-  }
-
-  /* verticalTrend da API: "climbing" / "descending" / "level" / null.
-     null NÃO quer dizer nivelado — é ausência de dado —, então nada é
-     desenhado nesse caso. Se a API ainda não mandar o campo, cai na
-     verticalRateFpm e aplica a mesma faixa de ±1.5 m/s do painel:
-     abaixo disso o voo é considerado nivelado. */
-  var TREND_FPM = 300;
-
-  function trendOf(trend, fpm) {
-    if (trend === 'climbing' || trend === 'descending' || trend === 'level') return trend;
-
-    if (fpm == null || !isFinite(fpm)) return '';
-    if (fpm >= TREND_FPM) return 'climbing';
-    if (fpm <= -TREND_FPM) return 'descending';
-    return 'level';
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Ciclo de atualização                                                */
-  /* ------------------------------------------------------------------ */
-
-  function refresh() {
-    if (state.demo) return;
-    if (state.inflight) return;
-    if (document.hidden) return;
-
-    state.inflight = true;
-    state.error = '';
-
-    fetchLive()
-      .then(function (json) {
-        var now = Date.now();
-        state.aircraft = normalizeLive(json);
-        state.lastFetchAt = now;
-        state.nextFetchAt = now + state.interval * 1000;
-        log('aeronaves:', state.aircraft.length, '· aeroporto', state.centerName);
-        buildScreens();
-        draw();
-        return enrich(state.aircraft);
-      })
-      .then(function () {
-        buildScreens();
-        draw();
-        updateCfgStatus();
-      })
-      .catch(function (err) {
-        var msg;
-        var kind = err && err.code;
-
-        if (kind === 'nocreds') {
-          msg = 'Configure e-mail ou usuário e senha da API em Configurações.';
-        } else if (kind === 'airport') {
-          msg = 'Este usuário não tem aeroporto vinculado — vincule em /api/users ou use um admin.';
-        } else if (kind === 'auth') {
-          state.token = '';
-          state.tokenExpiresAt = 0;
-          msg = AUTH_FAIL_MSG;
-        } else if (kind === 'rate') {
-          msg = AUTH_RATE_MSG;
-        } else if (err && err.name === 'TypeError') {
-          msg = 'Não consegui falar com ' + state.apiBase +
-            ' (API parada? CORS? veja Cors__AllowedOrigins).';
-        } else {
-          msg = (err && err.message) || 'Falha ao consultar a API.';
-        }
-
-        state.errorKind = kind || 'http';
-        state.error = msg;
-        log('ERRO:', msg);
-        setAlert(msg);
-        state.nextFetchAt = Date.now() + Math.max(state.interval, 30) * 1000;
-        draw();
-      })
-      .then(function () {
-        state.inflight = false;
-        updateCfgStatus();
-      });
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Telas                                                               */
-  /* ------------------------------------------------------------------ */
-
-  function clockOf(ms) { return ms ? hhmm(new Date(ms)) : '--:--'; }
-
-  function codeOf(ap) {
-    if (!ap) return '-';
-    return normalizeText(ap.iata || ap.icao || '-');
-  }
-
-  function cardData(a) {
-    var route = routeOf(a);
-    var center = { iata: state.centerName, icao: state.centerName, lat: state.lat, lon: state.lon };
-
-    var origin = (route && route.origin) || (a.kind === 'dep' ? center : null);
-    var destination = (route && route.destination) || (a.kind === 'arr' ? center : null);
-
-    var destHasPos = !!(destination && destination.lat != null && destination.lon != null);
-    var kmToGo = null;
-    if (destHasPos) kmToGo = haversineKm(a.lat, a.lon, destination.lat, destination.lon);
-    else if (a.kind === 'arr') kmToGo = a.d;
-
-    var etaMs = null;
-    if (kmToGo != null && a.speed && a.speed > 20) {
-      etaMs = Date.now() + (kmToGo / (a.speed / 1000)) * 1000;
-    }
-
-    var depMs = null;
-    if (a.kind === 'dep' && state.depSeen.has(a.icao)) {
-      depMs = state.depSeen.get(a.icao);
-    } else if (destHasPos && route && route.origin && route.origin.lat != null &&
-               a.speed && a.speed > 40) {
-      var legKm = haversineKm(route.origin.lat, route.origin.lon,
-        destination.lat, destination.lon);
-      var flownKm = legKm - kmToGo;
-      if (flownKm > 15) depMs = Date.now() - (flownKm / (a.speed / 1000)) * 1000;
-    }
-
-    if (depMs == null && a.kind === 'dep' && a.alt != null &&
-        a.vrate != null && a.vrate > 1.5 && a.alt > 300) {
-      var climbSec = a.alt / a.vrate;
-      if (climbSec < 3600) depMs = Date.now() - climbSec * 1000;
-    }
-
-    return {
-      a: a,
-      icao: a.icao,
-      kind: a.kind,
-      airline: airlineOf(a),
-      flight: normalizeText(a.callsign),
-      origin: origin,
-      destination: destination,
-      model: typeOf(a),
-      depMs: depMs,
-      etaMs: etaMs,
-      kmToGo: kmToGo,
-      trend: a.trend || '',
-      toDest: destHasPos || a.kind === 'arr'
-    };
-  }
-
-  function rowsOf(mode) {
-    var list = state.aircraft.filter(function (a) { return a.kind === mode; }).map(cardData);
-    if (mode === 'arr') {
-      list.sort(function (x, y) { return (x.etaMs || Infinity) - (y.etaMs || Infinity); });
-    } else {
-      list.sort(function (x, y) { return x.a.d - y.a.d; });
-    }
-    return list;
-  }
-
-  /* Ordem da rodada: chegadas (quem pousa antes), partidas (mais perto) e,
-     por fim, quem está só passando pela região — assim o painel nunca fica
-     vazio num momento sem chegada/partida. */
-  function orderedFlights() {
-    var arr = rowsOf('arr');
-    var dep = rowsOf('dep');
-    var usados = {};
-
-    arr.concat(dep).forEach(function (d) { usados[d.icao] = true; });
-
-    var outros = state.aircraft.filter(function (a) { return !usados[a.icao]; })
-      .map(cardData)
-      .sort(function (x, y) { return x.a.d - y.a.d; });
-
-    return arr.concat(dep, outros);
-  }
-
-  /* Uma tela por voo; o painel troca de voo a cada PAGE_MS e recomeça. */
-  function buildScreens() {
-    var atual = state.screens[state.screenIndex];
-    var icaoAtual = (atual && atual.type === 'flight') ? atual.data.icao : null;
-
-    var lista = orderedFlights();
-    var out = lista.map(function (d) { return { type: 'flight', data: d }; });
-    if (!out.length) out.push({ type: 'empty' });
-
-    state.screens = out;
-
-    /* mantém o voo que está na tela quando os dados são atualizados */
-    if (icaoAtual) {
-      for (var i = 0; i < out.length; i++) {
-        if (out[i].type === 'flight' && out[i].data.icao === icaoAtual) {
-          state.screenIndex = i;
-          return;
-        }
-      }
-    }
-    if (state.screenIndex >= out.length) state.screenIndex = 0;
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Logo em LEDs                                                        */
-  /* ------------------------------------------------------------------ */
-
-  /* Fontes do logo, na ordem tentada: PNG do AirGateway.Api e, se não
-     existir, o CDN por IATA. O arquivo tenta o logoCode (chave da marca,
-     ex.: JAT/JES/JAP -> JSM) e depois o próprio ICAO do callsign, para não
-     perder um JAT.png publicado por companhia. */
-  function logoCodeOf(airline) {
-    return airline.logoCode || airline.code;
-  }
-
-  function logoUrls(airline) {
-    var urls = [];
-    var code = logoCodeOf(airline);
-    if (airline.fromCallsign) {
-      var codes = [];
-      [code, airline.code].forEach(function (c) {
-        c = String(c || '').toUpperCase();
-        if (c && codes.indexOf(c) < 0) codes.push(c);
-      });
-      codes.forEach(function (c) {
-        urls.push(apiUrl(LOGO_LOCAL + c + '.png'));
-      });
-    }
-    if (airline.iata) urls.push(LOGO_API + airline.iata + '.png');
-    return urls;
-  }
-
-  /* PNG transparente -> recorte pelo alpha -> LOGO_W x LOGO_H LEDs. Devolve null
-     quando não há o que desenhar (imagem vazia, letreiro, canvas sem CORS). */
-  function quantizeLogo(img) {
-    try {
-      /* 1) descobre onde está o desenho dentro do PNG (tem muito vazio) */
-      var src = document.createElement('canvas');
-      src.width = img.width;
-      src.height = img.height;
-      var sg = src.getContext('2d');
-      sg.drawImage(img, 0, 0);
-      var sd = sg.getImageData(0, 0, img.width, img.height).data;
-
-      var minX = img.width, minY = img.height, maxX = -1, maxY = -1;
-      for (var y = 0; y < img.height; y++) {
-        for (var x = 0; x < img.width; x++) {
-          if (sd[(y * img.width + x) * 4 + 3] > 24) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-
-      if (maxX < 0) return null;
-
-      var cw = maxX - minX + 1;
-      var ch = maxY - minY + 1;
-
-      /* 2) fundo da arte: as logos do backend vêm em PNG opaco (GOL, LATAM,
-            AZUL, THY) e a cor do canto é o fundo. Pixel do fundo não acende */
-      var bg = [sd[0], sd[1], sd[2]];
-      var bgLum = 0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2];
-      var transparentBg = sd[3] < 24;
-
-      /* 3) todo recorte é desenhado proporcionalmente: largura limitada a
-            LOGO_W e altura a LOGO_H. Wordmark da JetSmart (4.3:1) e da Azul
-            (3.4:1) cabem em 40 x 9 LEDs. O corte por proporção que havia
-            aqui (> 2.2) rejeitava todas as logos do CDN, caindo na sigla. */
-
-      /* 4) desenha o recorte, mantendo a proporção, no bloco de LEDs */
-      var c = document.createElement('canvas');
-      c.width = LOGO_W;
-      c.height = LOGO_H;
-      var g = c.getContext('2d');
-      g.fillStyle = '#000';
-      g.fillRect(0, 0, LOGO_W, LOGO_H);
-
-      var esc = Math.min(LOGO_W / cw, LOGO_H / ch);
-      var w = cw * esc, h = ch * esc;
-      g.drawImage(img, minX, minY, cw, ch,
-        (LOGO_W - w) / 2, (LOGO_H - h) / 2, w, h);
-
-      var d = g.getImageData(0, 0, LOGO_W, LOGO_H).data;
-      var px = [];
-      for (var i = 0; i < LOGO_W * LOGO_H; i++) {
-        var r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2], al = d[i * 4 + 3];
-        /* fundo branco do CDN (pics.avs.io): sem alpha o canvas pinta de
-           branco e o letreiro sairia em alto relevo */
-        if (al >= 200 && transparentBg && (r + gg + b) / 3 > 235) {
-          px.push([0, 0, 0]);
-          continue;
-        }
-        /* fundo opaco da arte: só acende com contraste em relação a ele */
-        if (al >= 200 && !transparentBg &&
-            Math.abs(0.2126 * r + 0.7152 * gg + 0.0722 * b - bgLum) < 24) {
-          px.push([0, 0, 0]);
-          continue;
-        }
-        px.push(al < 24 ? [0, 0, 0]
-          : [Math.min(255, r * 1.35), Math.min(255, gg * 1.35), Math.min(255, b * 1.35)]);
-      }
-
-      return px;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /* Pixels do logo já quantizados, ou null enquanto carrega (o redesenho vem
-     no onReady). O cache é 1 resultado por companhia: 'loading' enquanto
-     tenta, depois { px: [...] } ou { px: null }. */
-  function ensureLogo(airline, onReady) {
-    var key = (airline.fromCallsign && logoCodeOf(airline)) || airline.iata;
-    var urls = key ? logoUrls(airline) : [];
-    if (!urls.length) return null;
-
-    var cached = state.logoCache[key];
-    if (cached && cached !== 'loading') return cached.px;
-    if (cached === 'loading') return null;
-
-    state.logoCache[key] = 'loading';
-
-    var next = 0;
-
-    function finish(px) {
-      state.logoCache[key] = { px: px };
-      onReady();
-    }
-
-    /* arquivo inexistente (404) ou inutilizável: tenta a próxima fonte */
-    function attempt() {
-      if (next >= urls.length) { finish(null); return; }
-      var img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = function () {
-        var px = quantizeLogo(img);
-        if (px) { finish(px); return; }
-        attempt();
-      };
-      img.onerror = attempt;
-      img.src = urls[next];
-      next += 1;
-    }
-
-    attempt();
-
-    return null;
-  }
-
-  /* ------------------------------------------------------------------ */
   /* Desenho das telas                                                   */
   /* ------------------------------------------------------------------ */
-
-  /* Nome da companhia em versão curta: é o que cabe do lado do logo. */
-  function airlineName(d) {
-    var known = AIRLINES[normalizeText(d.flight).slice(0, 3)];
-    if (known) return known.name;
-
-    /* sem companhia (táxi aéreo, aviação geral): mostra o país */
-    var n = d.airline.name ? normalizeText(d.airline.name) : normalizeText(d.a.country);
-    if (!n) return d.airline.code || '?';
-    if (n.length <= 15) return n;
-    return n.split(' ')[0];
-  }
-
-  /* Nivel de voo: sempre FL, sempre 3 digitos (FL046 em vez de 4600 FT).
-     A altitude vem em metros (normalizeLive), por isso a conversao aqui. */
-  function levelOf(d) {
-    if (d.a.alt == null || d.a.onGround) return '';
-    var fl = Math.round(d.a.alt * 3.28084 / 100);
-    if (fl < 1) return '';
-    return 'FL' + (fl < 100 ? ('00' + fl).slice(-3) : String(fl));
-  }
 
   /* Setas de tendencia vertical no bloco de 7 linhas do fim da 2a linha (voo),
      no desenho de ↘ e ↗: a cabeca e o canto inferior (ou superior) direito —
@@ -1216,67 +554,28 @@
     }
   }
 
-  /* distância sempre em km inteiros: um "9.4" gastaria LEDs em algo que
-     ninguém lê no painel (e prende a atenção no número errado) */
-  function kmText(km) {
-    if (km == null || !isFinite(km)) return '?';
-    return String(Math.round(km));
-  }
-
-  /* código curto da estação: IATA quando a API informa, senão o ICAO */
-  function centerCode() {
-    var ap = state.airport;
-    return (ap && ap.iata) || state.centerName;
-  }
-
-  function distLine(d) {
-    if (d.kmToGo != null && d.toDest) return kmText(d.kmToGo) + ' KM TO GO';
-    if (d.kind === 'dep') return kmText(d.a.d) + ' KM FROM ORIGIN';
-    return kmText(d.a.d) + ' KM FROM ' + truncate(centerCode(), 6);
-  }
-
   /* Layout do painel da foto (logo alargada: ocupa as 3 primeiras linhas
      e empurra o texto do cabeçalho para a direita):
-       [logo 40x27]    COMPANHIA  (LOGO_GAP: 4 LEDs livres entre os dois)
+       [logo 31x31]    COMPANHIA  (LOGO_GAP: 4 LEDs livres entre os dois)
                     VOO        ↗/↘ (tendencia, fim da 2a linha)
                     ────────── linha verde
-                    ORG -> DST
+                    ORG -> DST           FL### (borda direita)
        MODELO
        DEP hh:mm              ETA hh:mm
-       15 KM TO GO            n/m
-  */
-  function drawFlight(d) {
-    var logoPx = ensureLogo(d.airline, function () { draw(); });
+       NN KM TO GO                  n/m
 
+     Todos os textos vêm prontos e truncados de GET /api/sbfi/live; os cortes
+     por largura daqui só protegem o desenho contra resposta fora do contrato
+     (são idempotentes no caso conforme). */
+  function drawFlight(s) {
     /* o espaço do logo é sempre reservado, para o texto não pular de lugar
-       entre um voo e outro. A logo desce 1 LED para ficar centrada no bloco
-       das 3 primeiras linhas (companhia 0..6, voo 9..15, rota 23..29). A
-       logo tem LOGO_W LEDs e o texto do cabeçalho começa em LOGO_TEXT_X. */
-    var logoY = 1;
-    if (logoPx) {
-      for (var y = 0; y < LOGO_H; y++) {
-        for (var x = 0; x < LOGO_W; x++) {
-          px(x, y + logoY, logoPx[y * LOGO_W + x]);
-        }
-      }
-    } else {
-      var col = d.airline.color;
-      for (var i = 0; i < LOGO_W; i++) {
-        px(i, logoY, col); px(i, logoY + LOGO_H - 1, col);
-      }
-      for (var j = 0; j < LOGO_H; j++) {
-        px(0, j + logoY, col); px(LOGO_W - 1, j + logoY, col);
-      }
-      var sigla = (d.airline.iata || d.airline.code || '?').slice(0, 3);
-      text(Math.round((LOGO_W - textWidth(sigla, 1)) / 2), logoY + 10, sigla, C.white);
-    }
+       entre um voo e outro. A logo encosta no topo (linha 0) do bloco das
+       3 primeiras linhas (companhia 0..6, voo 12..18, rota 24..30). */
+    var logoY = 0;
+    if (!drawLogo(s, logoY)) drawSigla(s, logoY);
 
     /* o cabeçalho (companhia, voo, rota) começa depois da logo + LOGO_GAP
-       LEDs de respiro. Os cortes abaixo são por largura (não por número de
-       letras), para nada encostar na tendência ou no nível de voo.
-       A linha da rota é composta na ordem rota -> FL, então o que fica sem
-       espaço é o nível de voo: ele cede antes de a rota perder a última
-       letra do destino. */
+       LEDs de respiro. */
     var tx = LOGO_TEXT_X;
 
     /* folga em caracteres do nome da companhia: o que sobra até a borda,
@@ -1285,60 +584,57 @@
 
     /* a seta de tendencia (↗ subindo, ↘ descendo; nada em "level" ou sem
        dado) fecha a 2a linha do painel, a do numero do voo, com 1 LED de
-       folga da borda. Ela ocupa as linhas 9..15, entao o meio da linha do voo
-       (12) coincide com a linha do meio da seta (12). */
-    var trendW = arrowOf(d.trend) ? ARROW_W - 1 : 0;
+       folga da borda. Ela ocupa as linhas 12..18, entao o meio da linha do
+       voo (15) coincide com a linha do meio da seta (15). */
+    var trendW = arrowOf(s.verticalTrend) ? ARROW_W - 1 : 0;
     var trendX = W - trendW - 1;
     var vooMax = Math.floor((trendX - (trendW ? 2 : 0) - tx + 1) / 6);
+
     /* o nível de voo fecha a linha da rota, à direita, e é sempre mostrado:
        a rota é que cede espaço para ele. Com 2 px de vão livre entre os dois
-       e o nível de voo inteiro (FL046, 3 letras): a rota é cortada pelo
-       destino quando não cabe, em vez de o FL sumir. */
-    var lvl = levelOf(d);
+       e o nível de voo inteiro (FL046, 3 letras). */
+    var lvl = normalizeText(s.levelText);
     var lvlW = lvl ? textWidth(lvl, 1) : 0;
     var lvlGap = lvl ? 2 : 0;
     var rotaMax = W - tx - 2 - (lvl ? lvlW + lvlGap : 0);
 
-    text(tx, 0, truncate(airlineName(d), folga), C.white);
+    text(tx, AIRLINE_Y, truncate(s.airlineName, folga), C.white);
 
-    /* a 2a linha é só o voo; o número nunca é cortado — quem cede espaço é
-       a rota (ver rotaMax acima) */
-    text(tx, 9, truncate(d.flight, trendW ? vooMax : folga), C.white);
-    if (trendW) drawTrend(d.trend, trendX, 9);
+    /* a 2a linha é só o voo */
+    text(tx, FLIGHT_Y, truncate(s.flight, trendW ? vooMax : folga), C.white);
+    if (trendW) drawTrend(s.verticalTrend, trendX, FLIGHT_Y);
 
     /* linha verde dividindo o cabeçalho (companhia + voo) da rota: fica no
-       meio do vão livre (3 LED acima, 3 abaixo) — no 17 ela encostava no voo */
-    for (var k = tx; k < W; k++) px(k, 19, C.green);
+       meio do vão livre (2 LEDs acima, 2 abaixo) */
+    for (var k = tx; k < W; k++) px(k, RULE_Y, C.green);
 
-    /* origem/destino desconhecidos aparecem só de um lado da seta.
-       A seta "->" vira um glifo dedicado: como '-' e '>' são caracteres da
-       matriz, cada um gastava uma célula de 6 px e a ponta da seta ficava
-       a 5 LEDs de distancia da haste. Aqui a haste tem 7 px e a ponta
-       encosta nela. */
-    var org = d.origin ? codeOf(d.origin) : '';
-    var dst = d.destination ? codeOf(d.destination) : '';
-    var rota = (org ? org + ' ' : '') + '\u0000' + ' ' + (dst || '?');
+    /* origem/destino: o servidor manda os dois lados (sintéticos ou não) e
+       um lado pode vir vazio quando é desconhecido. A seta "->" vira um glifo
+       dedicado, como sempre foi. */
+    var org = normalizeText(s.originText || '');
+    var dst = normalizeText(s.destinationText || '');
+    var rota = (org ? org + ' ' : '') + ROUTE_MARK + ' ' + (dst || '?');
 
-    textRoute(tx, 23, rota, rotaMax, C.cyan);
+    textRoute(tx, ROUTE_Y, rota, rotaMax, C.cyan);
     /* o nível de voo encosta na borda direita: textRight já recua 1 LED da
        borda que recebe, então W + 1 deixa o último LED do FL na coluna 127 */
-    if (lvl) textRight(W + 1, 23, lvl, C.cyan);
+    if (lvl) textRight(W + 1, ROUTE_Y, lvl, C.cyan);
 
-    /* da rota para baixo, espacamento uniforme de 4 LEDs entre as linhas:
-       rota 23..29, modelo 34..40, DEP/ETA 45..51, distancia 56..62 */
-    text(0, 34, truncate(d.model || 'TYPE ?', 21), C.dimText);
+    /* da rota para baixo, todas as linhas com o mesmo vão (LINE_GAP):
+       rota 24..30, modelo 35..41, DEP/ETA 46..52, distancia 57..63 — a ultima
+       linha encosta na base do painel (64 linhas, 0..63). */
+    text(0, MODEL_Y, truncate(s.model || 'TYPE ?', 21), C.dimText);
 
-    /* DEP e ETA lado a lado (os horários já são UTC) */
-    var dep = 'DEP ' + clockOf(d.depMs);
-    text(0, 45, dep, C.amber);
-    text(textWidth(dep, 1) + 7, 45, 'ETA ' + clockOf(d.etaMs), C.white);
+    /* DEP e ETA lado a lado (os horários já vêm em UTC, com "--:--" quando
+       não há o estimado) */
+    var dep = (s.depText || 'DEP  ' + utcClock(s.depAt)).trim();
+    var eta = (s.etaText || 'ETA  ' + utcClock(s.etaAt)).trim();
+    text(0, DEP_Y, dep, C.amber);
+    text(textWidth(dep, 1) + 7, DEP_Y, eta, C.white);
 
     /* ultima linha: distancia a esquerda e, quando couber, a posicao na
-       rodada no fim da linha (a seta saiu daqui e foi para a 2a linha) */
-    var pos = state.screens.length > 1
-      ? (state.screenIndex + 1) + '/' + state.screens.length
-      : '';
-
+       rodada no fim da linha (positionText do servidor) */
+    var pos = normalizeText(s.positionText || '');
     var posW = 0;
     if (pos) {
       posW = textWidth(pos, 1) + 1;
@@ -1346,31 +642,55 @@
     }
 
     var distMax = W - 3 - (posW ? posW + 3 : 0);
-    text(0, 56, truncateToWidth(distLine(d), distMax), C.green);
+    text(0, DIST_Y, truncateToWidth(s.distText || '', distMax), C.green);
 
-    if (pos && posW) textRight(W - 1, 56, pos, C.dimText);
+    if (pos && posW) textRight(W - 1, DIST_Y, pos, C.dimText);
   }
 
-  function drawEmpty() {
-    textCenter(12, AREA_LABEL, C.cyan);
-    textCenter(26, 'NO FLIGHTS', C.amber);
-
-    /* resposta vazia da API é diferente de "ainda não consultei" */
-    textCenter(38, state.lastFetchAt ? 'NO TRAFFIC' : 'STANDBY', C.dimText);
-    textCenter(52, hhmmss(new Date()) + ' UTC', C.white);
+  /* Telas que não são de voo (sem voos / fonte sem dado) chegam prontas no
+     endpoint: três linhas + relógio UTC, nas posições e cores de sempre. */
+  function linesText3(s, fallback) {
+    var l = (s && s.lines) || [];
+    return [
+      normalizeText(l[0] || fallback[0]),
+      normalizeText(l[1] || fallback[1]),
+      normalizeText(l[2] || fallback[2])
+    ];
   }
 
-  function drawError() {
+  function drawEmpty(s) {
+    var l = linesText3(s, [AREA_LABEL, 'NO FLIGHTS', 'NO TRAFFIC']);
+    var clock = (s && s.clock) || hhmmss(new Date());
+
+    textCenter(12, l[0], C.cyan);
+    textCenter(26, l[1], C.amber);
+    textCenter(38, l[2], C.dimText);
+    textCenter(52, clock + ' UTC', C.white);
+  }
+
+  function drawError(s) {
+    var l = linesText3(s, [AREA_LABEL, 'NO SIGNAL', 'API / NET']);
+    var clock = (s && s.clock) || hhmmss(new Date());
+
+    textCenter(12, l[0], C.cyan);
+    textCenter(24, l[1], C.red);
+    textCenter(36, l[2], C.amber);
+    textCenter(52, clock + ' UTC', C.white);
+  }
+
+  /* Sem rodada nenhuma do servidor: o painel desenha o que ele mesmo sabe
+     (ainda não consultou / erro de rede / 429), como antes. */
+  function drawClientError() {
+    var ls = liveState();
+    var kind = ls ? ls.errorKind : '';
+
     textCenter(12, AREA_LABEL, C.cyan);
 
-    if (!state.email || !state.password) {
-      textCenter(24, 'NO LOGIN', C.red);
-      textCenter(36, 'SETTINGS > API', C.amber);
-    } else if (state.errorKind === 'auth') {
-      textCenter(24, 'AUTH FAILED', C.red);
-      textCenter(36, 'SETTINGS > API', C.amber);
-    } else if (state.errorKind === 'rate') {
-      /* rate limit do login: 10 tentativas/min por IP — só esperar */
+    if (!ls || ls.phase === 'boot' || (!ls.errorKind && !ls.lastFetchAt)) {
+      textCenter(24, 'STANDBY', C.amber);
+      textCenter(36, 'SBFI LIVE', C.dimText);
+    } else if (kind === 'rate') {
+      /* rate limit do endpoint (429): só esperar */
       textCenter(24, 'TOO MANY TRIES', C.red);
       textCenter(36, 'WAIT A MINUTE', C.amber);
     } else {
@@ -1384,20 +704,28 @@
   function draw() {
     clear();
 
-    if (state.error && !state.aircraft.length) {
-      drawError();
-    } else {
-      var s = state.screens[state.screenIndex] || state.screens[0];
-      if (s && s.type === 'flight') drawFlight(s.data);
-      else drawEmpty();
-    }
+    var s = currentScreen();
+    if (s && s.type === 'flight') drawFlight(s);
+    else if (s && s.type === 'empty') drawEmpty(s);
+    else if (s && s.type === 'error') drawError(s);
+    else drawClientError();
 
     flush();
   }
 
   function nextScreen() {
-    if (state.screens.length > 1) {
-      state.screenIndex = (state.screenIndex + 1) % state.screens.length;
+    var list = screens();
+    if (list.length > 1) {
+      state.screenIndex = (state.screenIndex + 1) % list.length;
+    }
+    state.lastPageAt = Date.now();
+    draw();
+  }
+
+  function prevScreen() {
+    var list = screens();
+    if (list.length > 1) {
+      state.screenIndex = (state.screenIndex + list.length - 1) % list.length;
     }
     state.lastPageAt = Date.now();
     draw();
@@ -1410,8 +738,9 @@
   function tick() {
     if (document.hidden) return;
 
-    if (state.screens.length > 1 && Date.now() - state.lastPageAt > PAGE_MS) {
-      state.screenIndex = (state.screenIndex + 1) % state.screens.length;
+    /* telas de voo trocam na rodada; empty/error ficam até a próxima leitura */
+    if (screens().length > 1 && Date.now() - state.lastPageAt > state.pageMs) {
+      state.screenIndex = (state.screenIndex + 1) % screens().length;
       state.lastPageAt = Date.now();
     }
 
@@ -1423,221 +752,99 @@
       el.dockStatus.hidden = !visivel;
     }
 
-    if (Date.now() >= state.nextFetchAt) {
+    var ls = liveState();
+    if (ls && Date.now() >= ls.nextFetchAt) {
       if (!state.demo) refresh();
-    } else updateCfgStatus();
+    }
+
+    /* a tela de Informações mostra relógio e estado ao vivo */
+    if (el.info && !el.info.hidden) updateInfo();
   }
 
   /* ------------------------------------------------------------------ */
   /* Persistência                                                        */
   /* ------------------------------------------------------------------ */
 
-  var LS_KEY = 'sbfiPainelApi';          // { email, password }
-  var LS_ROUTES = 'sbfiRadarRoutes';
-  var LS_AC = 'sbfiRadarAc';
+  /* O painel público não guarda mais credenciais nem caches de rota: este são
+     chaves antigas de quando ele fazia login e consultava o ADSBDB. Elas são
+     removidas neste navegador (higiene); o reload do service worker continua. */
+  var LS_KEY = 'sbfiPainelApi';          // credenciais antigas — obsoleto
+  var LS_ROUTES = 'sbfiRadarRoutes';     // cache do ADSBDB — obsoleto
+  var LS_AC = 'sbfiRadarAc';             // cache do ADSBDB — obsoleto
   var STREAM_URL = 'https://ic.io.tec.br/sbfi';
 
-  /* credenciais da API ficam no localStorage deste navegador; o endereco da
-     API nao e salvo (e fixo), e um "apiBase" antigo no registro e ignorado */
-  function loadCreds() {
+  function purgeLegacyStorage() {
     try {
-      var k = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-      if (!k) return;
-      state.email = k.email || '';
-      state.password = k.password || '';
-    } catch (e) { }
-  }
-
-  function saveCreds(email, password) {
-    state.email = email;
-    state.password = password;
-    state.token = '';
-    state.tokenExpiresAt = 0;
-    try {
-      if (email || password) {
-        localStorage.setItem(LS_KEY, JSON.stringify({
-          password: password
-        }));
-      } else {
-        localStorage.removeItem(LS_KEY);
-      }
-    } catch (e) { }
-  }
-
-  function pruneCache(obj, ttlMs) {
-    var now = Date.now();
-    var keys = Object.keys(obj || {}).sort(function (a, b) {
-      return (obj[a].t || 0) - (obj[b].t || 0);
-    }).slice(-CACHE_CAP);
-    var out = {};
-    keys.forEach(function (k) {
-      if (now - (obj[k].t || 0) < ttlMs) out[k] = obj[k];
-    });
-    return out;
-  }
-
-  function loadCaches() {
-    try { state.routes = pruneCache(JSON.parse(localStorage.getItem(LS_ROUTES) || '{}'), ROUTE_TTL); }
-    catch (e) { state.routes = {}; }
-    try { state.acinfo = pruneCache(JSON.parse(localStorage.getItem(LS_AC) || '{}'), AC_TTL); }
-    catch (e) { state.acinfo = {}; }
-  }
-
-  function saveCaches() {
-    try {
-      state.routes = pruneCache(state.routes, ROUTE_TTL);
-      state.acinfo = pruneCache(state.acinfo, AC_TTL);
-      localStorage.setItem(LS_ROUTES, JSON.stringify(state.routes));
-      localStorage.setItem(LS_AC, JSON.stringify(state.acinfo));
+      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_ROUTES);
+      localStorage.removeItem(LS_AC);
     } catch (e) { }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Ajustes: endereço da API e credenciais                              */
+  /* Informações (a antiga tela de Configurações — só leitura)           */
   /* ------------------------------------------------------------------ */
 
-  function setAlert(msg) {
-    el.alertBox.className = 'cfg-alert' + (msg ? ' show' : '');
-    el.alertBox.textContent = msg || '';
+  function openInfo() {
+    el.info.hidden = false;
+    updateInfo();
+    if (el.btnCloseInfo) el.btnCloseInfo.focus();
   }
 
-  function openCfg() {
-    el.email.value = state.email;
-    el.password.value = state.password;
-    setAlert('');
-    updateCfgStatus();
-    el.cfg.hidden = false;
-    el.email.focus();
+  function closeInfo() { el.info.hidden = true; }
+
+  function setInfo(field, value) {
+    var node = document.querySelector('[data-info="' + field + '"]');
+    if (node) node.textContent = value;
   }
 
-  function closeCfg() { el.cfg.hidden = true; }
-
-  function updateCfgStatus() {
-    var user = state.user;
-    var linhaUser = user
-      ? userLabel(user) + ' · ' + user.role +
-        (user.airport ? ' · ' + user.airport.icao : ' · sem aeroporto')
-      : 'nenhum (entre com e-mail ou usuário e senha)';
-
-    var expira = state.token && state.tokenExpiresAt > Date.now()
-      ? 'token válido por ' + Math.round((state.tokenExpiresAt - Date.now()) / 60000) + ' min'
-      : 'sem token';
-
-    el.cfgStatus.textContent =
-      'API: ' + state.apiBase + '\n' +
-      'usuário: ' + linhaUser + '\n' +
-      'estação: ' + state.centerName +
-        ' · ' + state.aircraft.length +
-        (state.aircraft.length === 1 ? ' aeronave' : ' aeronaves') + ' na última consulta\n' +
-      'última leitura: ' + (state.lastFetchAt ? hhmmss(new Date(state.lastFetchAt)) + ' UTC' : '—') +
-        ' · ' + expira +
-      (state.error ? '\n' + state.error : '');
+  function stateLabel(ls) {
+    if (!ls) return '—';
+    if (ls.phase === 'boot') return 'aguardando primeira leitura';
+    if (ls.errorKind === 'rate') {
+      var wait = ls.retryAfterMs ? ' · aguardar ' + Math.ceil(ls.retryAfterMs / 1000) + ' s' : '';
+      return '429 · muitas tentativas' + wait;
+    }
+    if (ls.errorKind === 'net') return 'SEM SINAL · ' + ls.error;
+    if (ls.errorKind === 'server') return 'FONTE FORA DO AR · ' + ls.error;
+    if (ls.errorKind) return ls.error || ls.errorKind;
+    if (ls.live && ls.live.stale) return 'STALE ' + (ls.live.staleAgeSeconds | 0) + ' s';
+    return 'OK';
   }
 
-  el.cfgForm.addEventListener('submit', function (ev) {
-    ev.preventDefault();
+  function updateInfo() {
+    if (!el.info || el.info.hidden) return;
 
-    var email = el.email.value.trim();
-    var senha = el.password.value;
+    var ls = liveState();
+    var doc = ls && ls.live;
+    var ap = doc && doc.airport;
+    var n = screens().length;
+    var cur = currentScreen();
 
-    if (!email || !senha) {
-      setAlert('Informe e-mail ou usuário e senha do usuário da API.');
-      return;
+    setInfo('source', (doc ? 'GET /api/sbfi/live' : 'GET /api/sbfi/live') + ' · ' + (ls ? ls.apiBase : API_BASE));
+    setInfo('airport', ap
+      ? [ap.icao, ap.iata, ap.name].filter(Boolean).join(' · ')
+      : '—');
+    setInfo('window', doc && doc.windowMinutes != null ? doc.windowMinutes + ' min' : '—');
+    setInfo('rotation', doc && doc.rotation
+      ? (n === 1 ? '1 tela' : n + ' telas') + ' · ' + doc.rotation.pageSeconds + ' s/tela'
+      : '—');
+    setInfo('screen', n ? ((state.screenIndex % n) + 1) + '/' + n +
+      (cur && cur.type === 'flight' ? ' · ' + (cur.flight || cur.icao || '') : '') : '—');
+    setInfo('updated', doc && doc.generatedAt
+      ? hhmmss(new Date(doc.generatedAt)) + ' UTC'
+      : '—');
+    setInfo('status', stateLabel(ls));
+    setInfo('fetched', ls && ls.lastFetchAt ? hhmmss(new Date(ls.lastFetchAt)) + ' UTC' : '—');
+
+    if (el.infoStatus) {
+      el.infoStatus.className = 'info-status' +
+        (ls && ls.errorKind ? ' bad' : (doc && doc.stale ? ' stale' : ''));
     }
 
-    saveCreds(email, senha);
-    closeCfg();
-    state.error = '';
-    state.nextFetchAt = 0;
-    refresh();
-  });
-
-  el.btnClearKey.addEventListener('click', function () {
-    saveCreds('', '');
-    state.user = null;
-    state.airportId = null;
-    state.aircraft = [];
-    state.screens = [];
-    state.error = '';
-    el.email.value = '';
-    el.password.value = '';
-    setAlert('Credenciais removidas deste navegador.');
-    updateCfgStatus();
-    draw();
-  });
-
-  /* olho do campo de senha: alterna texto/senha e troca o icone */
-  var btnPw = $('btnTogglePw');
-  if (btnPw) {
-    btnPw.addEventListener('click', function () {
-      var visivel = el.password.type === 'text';
-      el.password.type = visivel ? 'password' : 'text';
-      btnPw.classList.toggle('on', !visivel);
-      btnPw.setAttribute('aria-pressed', String(!visivel));
-      btnPw.setAttribute('aria-label', visivel ? 'mostrar senha' : 'ocultar senha');
-      el.password.focus();
-      try {
-        el.password.setSelectionRange(el.password.value.length, el.password.value.length);
-      } catch (e) { }
-    });
+    /* o relógio da tela de Informações anda mesmo sem resposta nova */
+    setInfo('clock', hhmmss(new Date()) + ' UTC');
   }
-
-  /* tela cheia: o iPad/Safari antigo usa webkit; sem suporte, o botao some */
-  function fullElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement || null;
-  }
-
-  function syncFull() {
-    if (!el.btnFull) return;
-    var ativo = !!fullElement();
-    el.btnFull.classList.toggle('on', ativo);
-    el.btnFull.setAttribute('aria-pressed', String(ativo));
-    el.btnFull.setAttribute('aria-label', ativo ? 'sair da tela cheia' : 'tela cheia');
-    fit();
-  }
-
-  if (el.btnFull) {
-    var alvo = document.documentElement;
-    var pode = !!(alvo.requestFullscreen || alvo.webkitRequestFullscreen);
-
-    if (!pode) {
-      el.btnFull.hidden = true;
-    } else {
-      el.btnFull.addEventListener('click', function () {
-        try {
-          if (fullElement()) {
-            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-          } else {
-            (alvo.requestFullscreen || alvo.webkitRequestFullscreen).call(alvo);
-          }
-        } catch (e) { }
-      });
-
-      document.addEventListener('fullscreenchange', syncFull);
-      document.addEventListener('webkitfullscreenchange', syncFull);
-    }
-  }
-
-  el.btnCfg.addEventListener('click', openCfg);
-  el.btnCloseCfg.addEventListener('click', closeCfg);
-
-  el.cfg.addEventListener('click', function (ev) {
-    if (ev.target === el.cfg) closeCfg();
-  });
-
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape' && !el.cfg.hidden) { closeCfg(); return; }
-
-    /* no modo demo, as setas trocam de tela sem esperar a rodada de 30 s */
-    if (!state.demo || !el.cfg.hidden || !state.screens.length) return;
-    if (ev.key === 'ArrowRight') {
-      nextScreen();
-    } else if (ev.key === 'ArrowLeft') {
-      state.screenIndex = (state.screenIndex + state.screens.length - 1) % state.screens.length;
-      state.lastPageAt = Date.now();
-      draw();
-    }
-  });
 
   /* ------------------------------------------------------------------ */
   /* Copiar a tela atual                                                 */
@@ -1646,26 +853,26 @@
   /* texto da tela no formato de strip: uma linha por bloco do painel.
      Devolve null quando a tela nao e de voo (sem voos, erro, boot). */
   function screenText() {
-    var s = state.screens[state.screenIndex] || state.screens[0];
+    var ls = liveState();
+    var s = currentScreen();
     var hora = hhmmss(new Date()) + ' UTC';
 
     /* sem voo na tela nao ha o que copiar */
     if (!s || s.type !== 'flight') return null;
 
-    var d = s.data;
-    var lvl = levelOf(d);
     /* o texto copiado tem setas de verdade; "level" e sem dado vira '-' */
-    var seta = d.trend === 'climbing' ? '\u2197'
-      : d.trend === 'descending' ? '\u2198'
+    var seta = s.verticalTrend === 'climbing' ? '\u2197'
+      : s.verticalTrend === 'descending' ? '\u2198'
       : '';
+    var rota = (s.originText || '---') + ' -> ' + (s.destinationText || '---');
     var linha = [];
 
-    linha.push(d.flight + (airlineName(d) ? ' \u00b7 ' + airlineName(d) : ''));
-    linha.push((d.origin ? codeOf(d.origin) : '---') + ' -> ' + (d.destination ? codeOf(d.destination) : '---'));
-    linha.push((d.model || 'TYPE ?') + (lvl ? ' \u00b7 ' + lvl : '') +
-      (seta ? ' \u00b7 ' + seta + ' ' + (d.trend === 'climbing' ? 'CLB' : 'DES') : ''));
-    linha.push('DEP ' + clockOf(d.depMs) + ' \u00b7 ETA ' + clockOf(d.etaMs) + ' UTC');
-    linha.push(distLine(d));
+    linha.push(String(s.flight || s.icao || '') + (s.airlineName ? ' \u00b7 ' + s.airlineName : ''));
+    linha.push(rota);
+    linha.push((s.model || 'TYPE ?') + (s.levelText ? ' \u00b7 ' + s.levelText : '') +
+      (seta ? ' \u00b7 ' + seta + ' ' + (s.verticalTrend === 'climbing' ? 'CLB' : 'DES') : ''));
+    linha.push((s.depText || 'DEP --:--') + ' \u00b7 ' + (s.etaText || 'ETA --:--') + ' UTC');
+    linha.push(s.distText || '');
     linha.push(hora);
 
     return linha.join('\n');
@@ -1710,8 +917,8 @@
     }
   }
 
-  /* clicar no painel copia a tela atual; as setas e a rodada de 30 s
-     continuam trocando de voo */
+  /* clicar no painel copia a tela atual; as setas e a rodada continuam
+     trocando de voo */
   el.panel.addEventListener('click', function () {
     var texto = screenText();
     if (texto) copyText(texto);
@@ -1720,8 +927,6 @@
   /* ------------------------------------------------------------------ */
   /* Fonia: play e gravação (o gravador é o /radio-recorder.js)          */
   /* ------------------------------------------------------------------ */
-
-  state.wantPlay = false;
 
   function startAudio() {
     state.wantPlay = true;
@@ -1760,7 +965,69 @@
   });
 
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && Date.now() > state.nextFetchAt) refresh();
+    if (document.hidden) return;
+    /* voltou à tela: busca já (o endpoint tem cache de 10 s) e redesenha */
+    if (state.demo) { draw(); return; }
+    var ls = liveState();
+    if (!ls || Date.now() > ls.nextFetchAt) refresh();
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Tela cheia                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function fullElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function syncFull() {
+    if (!el.btnFull) return;
+    var ativo = !!fullElement();
+    el.btnFull.classList.toggle('on', ativo);
+    el.btnFull.setAttribute('aria-pressed', String(ativo));
+    el.btnFull.setAttribute('aria-label', ativo ? 'sair da tela cheia' : 'tela cheia');
+    fit();
+  }
+
+  if (el.btnFull) {
+    var alvo = document.documentElement;
+    var pode = !!(alvo.requestFullscreen || alvo.webkitRequestFullscreen);
+
+    if (!pode) {
+      el.btnFull.hidden = true;
+    } else {
+      el.btnFull.addEventListener('click', function () {
+        try {
+          if (fullElement()) {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          } else {
+            (alvo.requestFullscreen || alvo.webkitRequestFullscreen).call(alvo);
+          }
+        } catch (e) { }
+      });
+
+      document.addEventListener('fullscreenchange', syncFull);
+      document.addEventListener('webkitfullscreenchange', syncFull);
+    }
+  }
+
+  el.btnInfo.addEventListener('click', openInfo);
+  el.btnCloseInfo.addEventListener('click', closeInfo);
+
+  el.info.addEventListener('click', function (ev) {
+    if (ev.target === el.info) closeInfo();
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && !el.info.hidden) { closeInfo(); return; }
+
+    /* as setas trocam de tela sem esperar a rodada — no demo e na API real */
+    if (!el.info.hidden || !screens().length) return;
+    if (ev.key === 'ArrowRight') {
+      nextScreen();
+    } else if (ev.key === 'ArrowLeft') {
+      prevScreen();
+    }
   });
 
   /* ------------------------------------------------------------------ */
@@ -1777,330 +1044,281 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Modo demo: telas com dados falsos, sem rede e sem login             */
+  /* Modo demo: fixtures do endpoint, sem rede                           */
   /*                                                                     */
-  /* Abra /painel/?demo=<cenário> para congelar o painel num cenário e   */
-  /* ajustar o desenho sem depender da API. A barra no rodapé troca de   */
-  /* cenário; ← → trocam de tela dentro do cenário. Sem o parâmetro na   */
-  /* URL, nada deste bloco executa.                                      */
+  /* Abra /painel/?demo=<cenário> para congelar o painel num payload do  */
+  /* GET /api/sbfi/live e ajustar o desenho sem depender da rede. A barra */
+  /* no rodapé troca de cenário; ← → trocam de tela dentro do cenário.   */
+  /* Sem o parâmetro na URL, nada deste bloco executa.                   */
   /* ------------------------------------------------------------------ */
 
-  /* O demo usa a mesma API do painel (API_BASE): os logos vem de
-     wwwroot/airlines do AirGateway. Sobrescreva com ?api= se precisar. */
-  var DEMO_API = API_BASE;
+  var DEMO = (function () {
+    /* logo real de GOL, capturado do próprio endpoint (RGB565 40 × 27):
+       o demo exercita o mesmo caminho do bitmap de produção. */
+    var LOGO_TAM = {"code":"TAM","width":40,"height":27,"format":"rgb565","hash":"demo-tam","bitmap":"EKQQpBCkEKQQpBCk977/3//f/9//3//f/9//3/9d6pDq0PT29pv/vv/f/9//3//f/9//3//f/9//3//f/9//3/e+EKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3////////////////////37yL+iK6Kvxzvv0/lv/nv///////////////////////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f////////////////////v/P06OvoiuiK8Iv5Tvpx/BX9uf9e////////////////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9////////////0X/Vj/Hf///9/9mfMR6Uzwi/is+Mz4rPjM+lD8lv5b/9/////////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3///////////8rDoy/IP9FX+m//f/57+OvwU+e/4zPis+Mz4rPis+W7sVvff/////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f///////////zMuiK6IroiulM8vH0tv4a/37/Pf3a/DX6seFOsXCJsnsW73//////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9////////////468vHpTOiK6Iroiuhq6Mvysfz3/rzOfYyaSrYqlzKXU3jvfv/////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3///////////////nv468/TxreiK6IrwiuDMsXB69UL3KncydzJ3Mndj2fe//////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f///////////9F/T3/nv/nv781Fah0HlwUhMydyqXMpcyl0pVehOjltZ8////////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9////////////LR6GrpLLuUfHhC1SI0KjQqVTJ3MndiFKGR4Q74rPjt29X3v//////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3///////////u5R5cFnRMhMqFCo0KhQ6lGPYnVvGPO1Z81PJkJmRefNrN+9+/////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f///////////W3YS5U1YqNCo0U1aVGc6c97///+9erbxsGTq3Kpcyl1NY517/////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9/////////////////nPq2arZrnPv///9/OvZUaW7gylzJ3MpcydzJ3dFn3v//////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3//////////////////////vnsZcjPlr10LWMncydzJ3OrdbuIzardznXv///////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f///////////////////3n3Q4MlQqFCo0KlUyd0sXhJq+PO+f////////////////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9///////////////////+9+UzYqNCoUKjRbl51b1r3/3//////////////////////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3///////////////////735blmO3lRm+PO9+99/vn////////////////////////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f///////////////////339bd97///+9+rdt0OXya97//////////////////////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9//////////////////////3x2tm3xYUzYydTJ3Y9n3v//////////////////////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3///////////////////735blioUKjQqNCpVMpeM2v/f/////////////////////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f///////////////////vflM2KjQiFDJ0dBi1/O9+////////////////////////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9///////////////////+9+a/d0OKWazr33v//////////////////////////////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3////////////////////9/vfv///////////////////////////////////////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpP/f//////////////////////eetfudOu+e////////////////////////////////////3xCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/9////////////////////eea/YqM0sW5z7////////////////////////////////////fEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT/3///////////////////735LFCHyW5bvfv///////////////////////////////////98QpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPe+/9//3//f/9//3//f/9/nPVMUW5W1+/e//9//3//f/9//3//f/9//3//f/9//3//f/9/3vhCkEKQQpBCkEKQQpBCk"};
+    var LOGO_GLO = {"code":"GLO","width":40,"height":27,"format":"rgb565","hash":"demo-glo","bitmap":"EKQQpBCkEKQQpBCk+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD6wPtD/En87fzt/Ir7Q/rA+sD7hPxq/O387fxr7CrkKuvo80P7pfyr+6b6oPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+sD6oPwp/vn///////////0N+qD8i/87///////////vfcZZvffFdO5W///9cPqg+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6oPwH/zv/3v64/ZH9kP3T+4X8av98/77+uOba3xz3XP/f957V1b223tv///1w+qD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPsi/nb///2y+wL6oPqg+qD7Q/8a/979L+wqvdfFc/Po/jX///2y5Cveuv///XD6oPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk/Cj/nf86+2T6wPsB/Gn8iv1v///+uPsB3M699+RL+qD8av///pb64fXT///9cPqg+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT8q////lX6oPrA+8b/nf////////3z+sHVEL3X66b6wPul/53++fsC/S////1w+qD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPxq/9/+uPrh+sD7Q/3S/hP/fP///lX6wNTvvffr6Pqg/Af/vv7Y+uD9cf///XD6oPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+4T/Gv+9/Ir6oPrA+sD6oP52////fPvn5Eu9+NTw+wL9T////hTzZeZ3///9cPqg+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPzM/73/W/2R/Ir8av1P/3z//////xr1084XvdfVUuaZ713ls8VT3tv///52/Iv8q/yr+4UQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD9cP/e////////////vf1w/hT/////713GOL33vfe99733vdfeuv/////////////9LxCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+sD6wPsB/Gr9cP4U/jX9sfxJ+sD7IvyL/ZH+NfWz5M7crtTw3K7r6Pxq/fP98/3z/fP98/woEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPrA+sD6wPqg+qD6oPqg+sD6wPrA+sD6oPqg+qD6oPqg+qD6oPrA+qD6oPqg+qD6oPqg+qAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCk+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrAEKQQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKT6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sAQpBCkEKQQpBCkEKQQpBCkEKQQpBCkEKQQpPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wPrA+sD6wBCkEKQQpBCkEKQQpBCk"};
 
-  var DEMO_AIRPORTS = {
-    SBFI: { iata: 'IGU', icao: 'SBFI', city: 'Foz do Iguaçu', lat: -25.593485, lon: -54.490306 },
-    SARI: { iata: 'IGR', icao: 'SARI', city: 'Puerto Iguazú', lat: -25.737300, lon: -54.473500 },
-    SGES: { iata: 'AGT', icao: 'SGES', city: 'Ciudad del Este', lat: -25.454600, lon: -54.843600 },
-    SBGR: { iata: 'GRU', icao: 'SBGR', city: 'São Paulo', lat: -23.435600, lon: -46.473100 },
-    SBGL: { iata: 'GIG', icao: 'SBGL', city: 'Rio de Janeiro', lat: -22.810000, lon: -43.250600 },
-    SBCA: { iata: 'CAC', icao: 'SBCA', city: 'Cascavel', lat: -25.000300, lon: -53.500800 },
-    SAEZ: { iata: 'EZE', icao: 'SAEZ', city: 'Buenos Aires', lat: -34.822200, lon: -58.535800 }
-  };
+    var AIRPORT = { icao: 'SBFI', iata: 'IGU', name: 'Foz do Iguaçu' };
+    var DEP = '2026-11-23T11:30:00Z';
+    var ETA = '2026-11-23T13:22:00Z';
 
-  /* monta uma aeronave no formato que normalizeLive() devolve, populando
-     os mesmos caches que o ADSBDB preenche em produção */
-  function demoFlight(o) {
-    var a = {
-      icao: o.icao,
-      callsign: o.callsign,
-      country: o.country || 'Brazil',
-      lat: o.lat,
-      lon: o.lon,
-      alt: o.alt == null ? null : o.alt,
-      onGround: !!o.onGround,
-      speed: o.speed == null ? null : o.speed,
-      track: o.track == null ? 0 : o.track,
-      vrate: o.vrate == null ? null : o.vrate,
-      /* mesmo criterio de trendOf(): sem "trend" explicito, deduz do vrate */
-      trend: o.trend !== undefined
-        ? o.trend
-        : trendOf(null, o.vrate == null ? null : o.vrate * 196.8504),
-      d: o.d == null ? 0 : o.d,
-      kind: o.kind,
-      status: o.kind === 'arr' ? 'approaching' : o.kind === 'dep' ? 'departing' : 'overflight',
-      observedAt: new Date().toISOString()
+    var brand = {
+      GLO: { code: 'GLO', name: 'GOL', color: '#FF7A00', logoKey: 'GLO' },
+      TAM: { code: 'TAM', name: 'LATAM', color: '#BD5028', logoKey: 'TAM' },
+      AZU: { code: 'AZU', name: 'AZUL', color: '#0033A0', logoKey: 'AZU' },
+      ARG: { code: 'ARG', name: 'AEROLINEAS', color: '#0B5AA6', logoKey: 'ARG' },
+      JSM: { code: 'JSM', name: 'JETSMART', color: '#E4002B', logoKey: 'JSM' },
+      PRV: { code: 'PRV', name: 'PRIVATE', color: '#6b6b6b', logoKey: null }
     };
 
-    if (o.from || o.to) {
-      state.routes[a.callsign] = {
-        airline: o.airline || null,
-        origin: o.from ? DEMO_AIRPORTS[o.from] : null,
-        destination: o.to ? DEMO_AIRPORTS[o.to] : null,
-        t: Date.now()
+    var NA = { DEP: 'DEP --:--', ETA: 'ETA --:--' };
+
+    /* uma tela de voo no formato exato do SbfiScreenSbfiFlightScreen */
+    function flight(o) {
+      var air = brand[o.brand] || { code: '', name: '', color: null, logoKey: null };
+      return {
+        type: 'flight',
+        icao: o.icao,
+        callsign: o.flight,
+        flight: o.flight,
+        isPrivate: !o.brand,
+        badgeText: o.badge || o.iata || air.code || '',
+        airlineName: o.name || air.code || '',
+        airline: {
+          code: air.code, iata: o.iata || '', name: air.name,
+          color: air.color, logoKey: air.logoKey
+        },
+        origin: o.from || null,
+        originSource: o.from ? (o.fromSource || 'route') : 'none',
+        originText: o.fromText || '',
+        destination: o.to || null,
+        destinationSource: o.to ? (o.toSource || 'route') : 'none',
+        destinationText: o.toText || '',
+        status: o.status,
+        verticalTrend: o.trend || null,
+        depAt: o.depAt === undefined ? DEP : o.depAt,
+        etaAt: o.etaAt === undefined ? ETA : o.etaAt,
+        distanceKm: o.km,
+        altitudeFt: o.ft || null,
+        levelText: o.level || '',
+        model: o.model || 'TYPE ?',
+        depText: o.dep || NA.DEP,
+        etaText: o.eta || NA.ETA,
+        distText: o.dist || '',
+        index: o.index | 0,
+        positionText: o.pos || null
       };
     }
-    if (o.ac) state.acinfo[a.icao] = { model: o.ac, t: Date.now() };
-    if (o.depMinAgo != null) state.depSeen.set(a.icao, Date.now() - o.depMinAgo * 60000);
 
-    return a;
-  }
-
-  var DEMO = {
-    arrival: function () {
-      return {
-        aircraft: [demoFlight({
-          icao: 'e48a11', callsign: 'TAM3344', kind: 'arr',
-          lat: -25.5052, lon: -54.3801, alt: 1400, speed: 95, vrate: -3.1, d: 15,
-          airline: { name: 'LATAM', iata: 'LA', icao: 'TAM' },
-          from: 'SBGR', to: 'SBFI', ac: 'AIRBUS A320-214'
-        })]
+    function doc(screens, extra) {
+      var d = {
+        generatedAt: new Date().toISOString(),
+        windowMinutes: 10,
+        stale: false,
+        staleAgeSeconds: 0,
+        airport: AIRPORT,
+        rotation: { pageSeconds: 30, count: screens.length },
+        logos: { GLO: LOGO_GLO, TAM: LOGO_TAM },
+        screens: screens
       };
-    },
-
-    departure: function () {
-      return {
-        aircraft: [demoFlight({
-          icao: 'e48b22', callsign: 'GLO1234', kind: 'dep',
-          lat: -25.6505, lon: -54.5512, alt: 900, speed: 110, vrate: 7.2, d: 6,
-          airline: { name: 'GOL', iata: 'G3', icao: 'GLO' },
-          from: 'SBFI', to: 'SBGR', ac: 'BOEING 737-8EH', depMinAgo: 4
-        })]
-      };
-    },
-
-    overflight: function () {
-      return {
-        aircraft: [demoFlight({
-          icao: 'e48c33', callsign: 'ARG1773', kind: 'over', country: 'Argentina',
-          lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
-          airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
-          from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
-        })]
-      };
-    },
-
-    /* sem rota e sem modelo: exercita os fallbacks ('-> ?', 'TYPE ?') */
-    unknown: function () {
-      return {
-        aircraft: [demoFlight({
-          icao: 'a1b2c3', callsign: 'PRABC', kind: 'over',
-          lat: -25.4400, lon: -54.6600, alt: 1600, speed: 62, vrate: 0, d: 22
-        })]
-      };
-    },
-
-    /* cinco voos: testa o contador 1/5 e a rodada de 30 s */
-    multi: function () {
-      return {
-        aircraft: [
-          demoFlight({
-            icao: 'e48a11', callsign: 'TAM3344', kind: 'arr',
-            lat: -25.5052, lon: -54.3801, alt: 1400, speed: 95, vrate: -3.1, d: 15,
-            airline: { name: 'LATAM', iata: 'LA', icao: 'TAM' },
-            from: 'SBGR', to: 'SBFI', ac: 'AIRBUS A320-214'
-          }),
-          demoFlight({
-            icao: 'e48b22', callsign: 'GLO1234', kind: 'dep',
-            lat: -25.6505, lon: -54.5512, alt: 900, speed: 110, vrate: 7.2, d: 6,
-            airline: { name: 'GOL', iata: 'G3', icao: 'GLO' },
-            from: 'SBFI', to: 'SBGR', ac: 'BOEING 737-8EH', depMinAgo: 4
-          }),
-          demoFlight({
-            icao: 'e48c33', callsign: 'ARG1773', kind: 'over', country: 'Argentina',
-            lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
-            airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
-            from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
-          }),
-          demoFlight({
-            icao: 'e48d44', callsign: 'AZU4567', kind: 'arr',
-            lat: -25.7000, lon: -54.6200, alt: 2600, speed: 118, vrate: -4.5, d: 18,
-            airline: { name: 'AZUL', iata: 'AD', icao: 'AZU' },
-            from: 'SBCA', to: 'SBFI', ac: 'ATR 72-600'
-          }),
-          demoFlight({
-            icao: 'e48e55', callsign: 'JSM9988', kind: 'dep',
-            lat: -25.5600, lon: -54.4200, alt: 1500, speed: 125, vrate: 8.1, d: 9,
-            airline: { name: 'JETSMART', iata: 'JA', icao: 'JSM' },
-            from: 'SBFI', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 7
-          })
-        ]
-      };
-    },
-
-    empty: function () { return { aircraft: [] }; },
-
-    /* um cenario por logo ja publicado em wwwroot/airlines do AirGateway */
-    GLO: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48b22', callsign: 'GLO1234', kind: 'dep',
-        lat: -25.6505, lon: -54.5512, alt: 900, speed: 110, vrate: 7.2, d: 6,
-        airline: { name: 'GOL', iata: 'G3', icao: 'GLO' },
-        from: 'SBFI', to: 'SBGR', ac: 'BOEING 737-8EH', depMinAgo: 4
-      })] };
-    },
-
-    TAM: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48a11', callsign: 'TAM3344', kind: 'arr',
-        lat: -25.5052, lon: -54.3801, alt: 1400, speed: 95, vrate: -3.1, d: 15,
-        airline: { name: 'LATAM', iata: 'LA', icao: 'TAM' },
-        from: 'SBGR', to: 'SBFI', ac: 'AIRBUS A320-214'
-      })] };
-    },
-
-    LTG: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48f66', callsign: 'LTG8765', kind: 'dep',
-        lat: -25.5800, lon: -54.5200, alt: 2400, speed: 140, vrate: 6.4, d: 12,
-        airline: { name: 'LATAM', iata: 'LA', icao: 'LTG' },
-        from: 'SBFI', to: 'SBGL', ac: 'AIRBUS A321-231', depMinAgo: 9
-      })] };
-    },
-
-    AZU: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48d44', callsign: 'AZU4567', kind: 'arr',
-        lat: -25.7000, lon: -54.6200, alt: 2600, speed: 118, vrate: -4.5, d: 18,
-        airline: { name: 'AZUL', iata: 'AD', icao: 'AZU' },
-        from: 'SBCA', to: 'SBFI', ac: 'ATR 72-600'
-      })] };
-    },
-
-    ARG: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48c33', callsign: 'ARG1773', kind: 'over', country: 'Argentina',
-        lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
-        airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
-        from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
-      })] };
-    },
-
-    THY: function () {
-      return { aircraft: [demoFlight({
-        icao: '4bb1a2', callsign: 'THY216', kind: 'over', country: 'Turkey',
-        lat: -25.4200, lon: -54.3000, alt: 11887, speed: 249, vrate: 0, d: 62,
-        airline: { name: 'TURKISH', iata: 'TK', icao: 'THY' },
-        from: 'SBGR', to: 'LTFM', ac: 'AIRBUS A350-941'
-      })] };
-    },
-
-    JSM: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48e55', callsign: 'JSM9988', kind: 'dep',
-        lat: -25.5600, lon: -54.4200, alt: 1500, speed: 125, vrate: 8.1, d: 9,
-        airline: { name: 'JETSMART', iata: 'JA', icao: 'JSM' },
-        from: 'SBFI', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 7
-      })] };
-    },
-
-    /* caso real: EZE -> IGR com a JetSmart Argentina (ICAO JES, IATA JA).
-       O nome da companhia vem da AIRLINES: o adsbdb devolve "JS Aviation". */
-    JES: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48e56', callsign: 'JES3144', kind: 'dep',
-        lat: -25.5700, lon: -54.4400, alt: 102 * 30.48, speed: 120, vrate: 0, d: 67,
-        airline: { name: 'JS Aviation', iata: 'JA', icao: 'JES' },
-        from: 'SAEZ', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 20
-      })] };
-    },
-
-    /* a mesma marca pelo ICAO do Chile: mesma logo, placeholder JAT */
-    JAT: function () {
-      return { aircraft: [demoFlight({
-        icao: 'e48e57', callsign: 'JAT4412', kind: 'dep',
-        lat: -25.5700, lon: -54.4400, alt: 112 * 30.48, speed: 118, vrate: 0, d: 67,
-        airline: { name: 'JetSMART', iata: 'JA', icao: 'JAT' },
-        from: 'SAEZ', to: 'SARI', ac: 'AIRBUS A320-232', depMinAgo: 20
-      })] };
-    },
-
-    /* seta de tendencia: os quatro casos do verticalTrend da API */
-    trend: function () {
-      return {
-        aircraft: [
-          demoFlight({
-            icao: 'b10002', callsign: 'GLO1001', kind: 'dep', trend: 'climbing',
-            lat: -25.6505, lon: -54.5512, alt: 900, speed: 110, vrate: 6, d: 6,
-            airline: { name: 'GOL', iata: 'G3', icao: 'GLO' },
-            from: 'SBFI', to: 'SBGR', ac: 'BOEING 737-8EH', depMinAgo: 4
-          }),
-          demoFlight({
-            icao: 'b10003', callsign: 'TAM2002', kind: 'arr', trend: 'descending',
-            lat: -25.5052, lon: -54.3801, alt: 1400, speed: 95, vrate: -5, d: 15,
-            airline: { name: 'LATAM', iata: 'LA', icao: 'TAM' },
-            from: 'SBGR', to: 'SBFI', ac: 'AIRBUS A320-214'
-          }),
-          demoFlight({
-            icao: 'b10004', callsign: 'ARG3003', kind: 'over', country: 'Argentina',
-            trend: 'level',
-            lat: -25.3100, lon: -54.3000, alt: 10668, speed: 231, vrate: 0, d: 38,
-            airline: { name: 'AEROLINEAS', iata: 'AR', icao: 'ARG' },
-            from: 'SARI', to: 'SAEZ', ac: 'BOEING 737-8SH'
-          }),
-          demoFlight({
-            icao: 'b10005', callsign: 'JSM4004', kind: 'over', trend: null,
-            lat: -25.4200, lon: -54.3000, alt: 11887, speed: 249, vrate: 0, d: 62,
-            airline: { name: 'JETSMART', iata: 'JA', icao: 'JSM' },
-            from: 'SBCA', to: 'SAEZ', ac: 'AIRBUS A320-232'
-          })
-        ]
-      };
-    },
-
-    'err-login': function () {
-      return { aircraft: [], errorKind: 'nocreds', error: 'Configure e-mail ou usuário e senha da API em Configurações.' };
-    },
-
-    'err-auth': function () {
-      return { aircraft: [], errorKind: 'auth', error: AUTH_FAIL_MSG };
-    },
-
-    'err-rate': function () {
-      return { aircraft: [], errorKind: 'rate', error: AUTH_RATE_MSG };
-    },
-
-    'err-net': function () {
-      return { aircraft: [], errorKind: 'http', error: 'Could not reach the API (demo).' };
+      return Object.assign(d, extra || {});
     }
-  };
+
+    function single(s, extra) { return doc([s], extra); }
+
+    var ARR = {
+      icao: 'e49c05', flight: 'TAM3460', brand: 'TAM', iata: 'LA', name: 'LATAM',
+      from: 'SBGR', fromText: 'GRU', to: 'SBFI', toText: 'IGU', toSource: 'center',
+      status: 'approaching', trend: 'descending', level: 'FL089',
+      model: 'AIRBUS A320-214', dep: 'DEP 11:12', eta: 'ETA 13:15',
+      dist: '15 KM TO GO', km: 15, ft: 8900
+    };
+    var DEP_S = {
+      icao: 'e48b22', flight: 'GLO1234', brand: 'GLO', iata: 'G3', name: 'GOL',
+      from: 'SBFI', fromText: 'IGU', fromSource: 'center', to: 'SBGR', toText: 'GRU',
+      status: 'departing', trend: 'climbing', level: 'FL046',
+      model: 'BOEING 737-8EH', dep: 'DEP 13:05', eta: 'ETA 14:05',
+      dist: '9 KM FROM ORIGIN', km: 9, ft: 4600
+    };
+    var OVER = {
+      icao: 'e49c05', flight: 'ARG1773', brand: 'ARG', iata: 'AR', name: 'AEROLINEAS',
+      from: 'SARI', fromText: 'IGR', to: 'SAEZ', toText: 'AEP',
+      status: 'overflight', trend: 'level', level: 'FL350',
+      model: 'BOEING 737-8SH', dep: 'DEP 12:58', eta: 'ETA 14:10',
+      dist: '38 KM FROM SBFI', km: 38, ft: 35000
+    };
+
+    return {
+      arrival: function () { return single(flight(ARR)); },
+      departure: function () { return single(flight(DEP_S)); },
+      overflight: function () { return single(flight(OVER)); },
+
+      /* sem rota e sem modelo: exercita os fallbacks ('-> ?', 'TYPE ?') */
+      unknown: function () {
+        return single(flight({
+          icao: 'a1b2c3', flight: 'PRABC', brand: 'PRV', status: 'overflight',
+          trend: null, level: 'FL052', dist: '22 KM FROM SBFI', km: 22, ft: 5200
+        }));
+      },
+
+      /* cinco voos: testa o contador n/5 e a rodada de 30 s */
+      multi: function () {
+        var lista = [
+          flight(ARR), flight(DEP_S), flight(OVER),
+          flight(Object.assign({}, ARR, {
+            icao: 'e48d44', flight: 'AZU4567', brand: 'AZU', iata: 'AD', name: 'AZUL',
+            from: 'SBCA', fromText: 'CAC', level: 'FL085', model: 'ATR 72-600',
+            dep: 'DEP 12:30', eta: 'ETA 13:40', dist: '18 KM TO GO', km: 18, ft: 8500
+          })),
+          flight(Object.assign({}, DEP_S, {
+            icao: 'e48e55', flight: 'JSM9988', brand: 'JSM', iata: 'JA', name: 'JETSMART',
+            to: 'SARI', toText: 'IGR', level: 'FL150', model: 'AIRBUS A320-232',
+            dep: 'DEP 12:50', eta: 'ETA 13:50', dist: '24 KM FROM ORIGIN', km: 24, ft: 15000
+          }))
+        ];
+        var d = doc(lista);
+        d.screens.forEach(function (s, i) { s.index = i; s.positionText = (i + 1) + '/' + lista.length; });
+        return d;
+      },
+
+      /* seta de tendencia: os quatro casos do verticalTrend da API */
+      trend: function () {
+        var lista = [
+          flight({
+            icao: 'b10002', flight: 'GLO1001', brand: 'GLO', iata: 'G3', name: 'GOL',
+            from: 'SBFI', fromText: 'IGU', fromSource: 'center', to: 'SBGR', toText: 'GRU',
+            status: 'departing', trend: 'climbing', level: 'FL046',
+            model: 'BOEING 737-8EH', dep: 'DEP 13:05', eta: 'ETA 14:05',
+            dist: '9 KM FROM ORIGIN', km: 9, ft: 4600
+          }),
+          flight({
+            icao: 'b10003', flight: 'TAM2002', brand: 'TAM', iata: 'LA', name: 'LATAM',
+            from: 'SBGR', fromText: 'GRU', to: 'SBFI', toText: 'IGU', toSource: 'center',
+            status: 'approaching', trend: 'descending', level: 'FL089',
+            model: 'AIRBUS A320-214', dep: 'DEP 11:12', eta: 'ETA 13:15',
+            dist: '15 KM TO GO', km: 15, ft: 8900
+          }),
+          flight({
+            icao: 'b10004', flight: 'ARG3003', brand: 'ARG', iata: 'AR', name: 'AEROLINEAS',
+            from: 'SARI', fromText: 'IGR', to: 'SAEZ', toText: 'AEP',
+            status: 'overflight', trend: 'level', level: 'FL350',
+            model: 'BOEING 737-8SH', dep: 'DEP 12:58', eta: 'ETA 14:10',
+            dist: '38 KM FROM SBFI', km: 38, ft: 35000
+          }),
+          flight({
+            icao: 'b10005', flight: 'JSM4004', brand: 'JSM', iata: 'JA', name: 'JETSMART',
+            from: 'SBCA', fromText: 'CAC', to: 'SAEZ', toText: 'AEP',
+            status: 'overflight', trend: null, level: 'FL390',
+            model: 'AIRBUS A320-232', dist: '62 KM FROM SBFI', km: 62, ft: 39000
+          })
+        ];
+        var d = doc(lista);
+        d.screens.forEach(function (s2, i) { s2.index = i; s2.positionText = (i + 1) + '/' + lista.length; });
+        return d;
+      },
+
+      empty: function () {
+        return single({
+          type: 'empty', index: 0, positionText: null,
+          lines: [AREA_LABEL, 'NO FLIGHTS', 'NO TRAFFIC'], clock: hhmmss(new Date())
+        });
+      },
+
+      /* fonte parada: última resposta boa, com stale=true */
+      stale: function () {
+        var d = doc([
+          flight(ARR), flight(DEP_S), flight(OVER)
+        ]);
+        d.screens.forEach(function (s, i) { s.index = i; s.positionText = (i + 1) + '/3'; });
+        d.stale = true;
+        d.staleAgeSeconds = 75;
+        d.generatedAt = new Date(Date.now() - 75 * 1000).toISOString();
+        return d;
+      },
+
+      /* tela 'error' do servidor (sem dados ao vivo) */
+      'err-signal': function () {
+        return single({
+          type: 'error', reason: 'no-signal', index: 0, positionText: null,
+          lines: [AREA_LABEL, 'NO SIGNAL', 'API / NET'], clock: hhmmss(new Date())
+        });
+      },
+
+      /* falhas do próprio navegador (sem payload): o painel desenha a espera */
+      'err-rate': function () {
+        return { errorKind: 'rate', error: 'Muitas tentativas (429)', status: 429, retryAfterMs: 180000 };
+      },
+
+      'err-net': function () {
+        return { errorKind: 'net', error: 'Sem resposta da API', status: 0 };
+      }
+    };
+  })();
 
   function demoParam() {
     var m = /[?&]demo=([^&]*)/.exec(location.search);
     return m ? decodeURIComponent(m[1]) : '';
   }
 
-  /* ?api=http://host:porta aponta o demo para outra instancia do AirGateway
+  /* ?api=http://host:porta aponta o cliente para outra instancia do AirGateway
      (util quando a API local nao e a de producao) */
-  function demoApiParam() {
-    var m = /[?&]api=([^&]*)/.exec(location.search);
-    return m ? decodeURIComponent(m[1]).replace(/\/+$/, '') : '';
-  }
-
-  /* apiParam() roda antes do bloco do demo montar (var DEMO_API), por isso
-     procura o parametro direto na URL em vez de chamar demoApiParam(). */
   function apiParam() {
     var m = /[?&]api=([^&]*)/.exec(location.search);
     return m ? decodeURIComponent(m[1]).replace(/\/+$/, '') : '';
   }
 
+  /* Um cliente de mentira no mesmo formato do PainelLive: o painel desenha a
+     partir do mesmo estado, então o demo exercita o caminho real do desenho. */
+  function demoClient(payload) {
+    var st = {
+      apiBase: API_BASE, url: API_BASE + '/api/sbfi/live',
+      phase: payload.live ? 'ok' : 'error',
+      live: payload.live || null,
+      lastFetchAt: Date.now(), nextFetchAt: Infinity, inflight: null,
+      error: payload.error || '', errorKind: payload.errorKind || '',
+      status: payload.status || 0, retryAfterMs: payload.retryAfterMs || 0
+    };
+    /* mesmo decodificador do cliente real: o demo passa pelo mesmo desenho */
+    var cache = {};
+    function logoFor(key) {
+      var dto = st.live && st.live.logos && st.live.logos[key];
+      if (!dto) return null;
+      var k = dto.hash || key;
+      if (cache[k]) return cache[k];
+      try { cache[k] = PainelLive.decodeLogo(dto); } catch (e) { cache[k] = null; }
+      return cache[k];
+    }
+
+    return {
+      load: function () { return Promise.resolve(st); },
+      logoFor: logoFor,
+      screen: function () { var s = st.live && st.live.screens; return s && s[0] || null; },
+      findScreen: function () { return -1; },
+      reset: function () { },
+      getState: function () { return st; }
+    };
+  }
+
   function applyDemo(name) {
     if (!name || !DEMO[name]) return false;
 
-    state.routes = {};
-    state.acinfo = {};
-    state.depSeen = new Map();
-
-    var cenario = DEMO[name]();
+    var payload = DEMO[name]();
+    if (payload && Array.isArray(payload.screens)) {
+      payload = { live: PainelLive.normalize(payload), error: '', errorKind: '' };
+    }
 
     state.demo = name;
-    state.apiBase = demoApiParam() || DEMO_API;
-    state.centerName = DEMO_AIRPORTS.SBFI.icao;
-    state.airport = DEMO_AIRPORTS.SBFI;
-    state.lat = DEMO_AIRPORTS.SBFI.lat;
-    state.lon = DEMO_AIRPORTS.SBFI.lon;
-    state.aircraft = cenario.aircraft || [];
-    state.lastFetchAt = Date.now();
-    state.error = cenario.error || '';
-    state.errorKind = cenario.errorKind || '';
-    state.user = null;
-    state.email = cenario.errorKind === 'nocreds' ? '' : 'demo@iguspotters.com.br';
-    state.password = cenario.errorKind === 'nocreds' ? '' : 'demo';
+    state.screenIndex = 0;
+    state.lastPageAt = Date.now();
 
-    buildScreens();
+    live = demoClient(payload);
+    state.pageMs = pageMs();
+
     draw();
     demoBar(name);
+
+    /* no demo a tela de Informações já mostra o estado congelado */
+    if (!el.info.hidden) updateInfo();
     return true;
   }
 
@@ -2143,7 +1361,7 @@
 
     document.body.appendChild(bar);
 
-    /* a barra ocupa o rodape: sobe o dock para nao cobrir play/gravar/ajustes */
+    /* a barra ocupa o rodape: sobe o dock para nao cobrir play/gravar/informacoes */
     var dock = document.querySelector('.dock');
     if (dock) dock.style.bottom = (bar.offsetHeight + 10) + 'px';
   }
@@ -2153,16 +1371,18 @@
   /* ------------------------------------------------------------------ */
 
   function init() {
-    loadCreds();
-    loadCaches();
+    purgeLegacyStorage();
 
     state.lastPageAt = Date.now();
+    state.pageMs = pageMs();
 
     if (!applyDemo(demoParam())) draw();
 
     window.addEventListener('resize', fit);
     fit();
 
+    /* a rodada de páginas anda a cada segundo; a leitura de dados é
+       agendada pelo próprio cliente (10 s, entre telas) */
     setInterval(tick, 1000);
     if (!state.demo) refresh();
   }
@@ -2172,4 +1392,5 @@
   } else {
     init();
   }
+
 })();

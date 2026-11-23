@@ -61,7 +61,7 @@
       <span class="rec-dot" aria-hidden="true"></span>
     </button>
 
-    <button class="rbtn" id="btnCfg" type="button" aria-label="Configurações">
+    <button class="rbtn" id="btnInfo" type="button" aria-label="Informações">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
            stroke-linecap="round">
         <path d="M4 7h16M4 12h16M4 17h16" />
@@ -86,77 +86,78 @@
   <!-- stream da fonia: o /radio-recorder.js usa este player para o pré-roll -->
   <audio id="radioPlayer" preload="none" crossorigin="anonymous"></audio>
 
-  <!-- ============ CONFIGURAÇÕES: credenciais ============ -->
-  <div class="overlay" id="cfg" hidden>
-    <!-- autocomplete="on": sem isso o navegador ignora o autocomplete="username"
-         do campo de login e não oferece o usuário salvo.
-         O endereço da API não é editável: é fixo, definido no painel.js. -->
-    <form class="cfg" id="cfgForm" autocomplete="on" role="dialog" aria-modal="true"
-          aria-label="Configurações">
-      <div class="cfg-title">Configurações</div>
+  <!-- ============ INFORMAÇÕES: só leitura ============ -->
+  <!-- O painel é público e não tem mais nada para configurar: os dados vêm
+       prontos de GET /api/sbfi/live. Esta tela apenas describe a fonte e o
+       estado ao vivo (sem form, sem input, sem credenciais). -->
+  <div class="overlay" id="info" hidden>
+    <div class="cfg" role="dialog" aria-modal="true" aria-label="Informações">
+      <div class="cfg-title">Informações</div>
 
-      <div class="cfg-grid">
-        <!-- login aceita e-mail OU usuário: type=text, sem validação de formato.
-             A API decide pelo @ (com @ = e-mail; sem @ = username) e recebe
-             sempre no campo "email" do payload. -->
-        <label class="field">
-          <span>E-mail ou usuário</span>
-          <input id="email" type="text" spellcheck="false" autocapitalize="none"
-                 autocomplete="username" inputmode="text"
-                 placeholder="voce@exemplo.com ou usuario">
-        </label>
-        <label class="field">
-          <span>senha</span>
-          <span class="pw">
-            <input id="password" type="password" spellcheck="false" autocomplete="current-password"
-                   placeholder="senha">
-            <button class="pw-eye" id="btnTogglePw" type="button"
-                    aria-label="mostrar senha" aria-pressed="false">
-              <svg class="i-eye" viewBox="0 0 24 24" aria-hidden="true" fill="none"
-                   stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-                <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" />
-                <circle cx="12" cy="12" r="2.8" />
-              </svg>
-              <svg class="i-eye-off" viewBox="0 0 24 24" aria-hidden="true" fill="none"
-                   stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-                <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" />
-                <circle cx="12" cy="12" r="2.8" />
-                <path d="M4 20 20 4" />
-              </svg>
-            </button>
-          </span>
-        </label>
-      </div>
-
-      <div class="cfg-actions">
-        <button class="btn primary" type="submit">entrar</button>
-        <button class="btn" type="button" id="btnClearKey">limpar</button>
-        <button class="btn" type="button" id="btnCloseCfg">fechar</button>
-      </div>
+      <dl class="info-list">
+        <div class="info-row">
+          <dt>fonte</dt>
+          <dd data-info="source">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>aeroporto</dt>
+          <dd data-info="airport">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>janela</dt>
+          <dd data-info="window">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>rodada</dt>
+          <dd data-info="rotation">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>tela</dt>
+          <dd data-info="screen">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>leitura</dt>
+          <dd data-info="updated">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>consulta</dt>
+          <dd data-info="fetched">—</dd>
+        </div>
+        <div class="info-row">
+          <dt>estado</dt>
+          <dd><span class="info-status" id="infoStatus" data-info="status">—</span></dd>
+        </div>
+        <div class="info-row">
+          <dt>agora</dt>
+          <dd data-info="clock">—</dd>
+        </div>
+      </dl>
 
       <div class="cfg-help-block">
         <div class="cfg-help-title">Como usar</div>
         <ul class="cfg-help">
           <li><b>scroll</b> — o painel não rola; a página rola para caber na tela.</li>
           <li><b>clique no painel</b> — copia o voo na tela (voo, companhia, rota, modelo, nível, DEP/ETA, distância). Só copia quando há voo.</li>
-          <li><b>setas ← →</b> — voo anterior / próximo, sem esperar os 30 s da rodada.</li>
+          <li><b>setas ← →</b> — voo anterior / próximo, sem esperar a rodada.</li>
           <li><b>play</b> — fonia ao vivo do setor IGU/SBFI.</li>
           <li><b>gravar</b> — inicia o buffer retroativo de 2 min; clique de novo para parar e baixar o MP3.</li>
         </ul>
       </div>
 
-      <div class="cfg-status" id="cfgStatus">—</div>
-      <div class="cfg-alert" id="alertBox" role="status" aria-live="polite"></div>
+      <div class="cfg-actions">
+        <button class="btn" type="button" id="btnCloseInfo">fechar</button>
+      </div>
 
       <div class="cfg-credit">
         desenvolvido por <a href="https://romildo.net" target="_blank" rel="noopener noreferrer">romildo.net</a>
       </div>
-    </form>
+    </div>
   </div>
 
   <script src="/radio-recorder.js" defer></script>
   <!-- Tela não apaga enquanto o painel está aberto (TV / Fire Stick) -->
   <script src="/keep-awake.js" defer></script>
+  <script src="/painel/painel-live.js" defer></script>
   <script src="/painel/painel.js" defer></script>
 </body>
 
