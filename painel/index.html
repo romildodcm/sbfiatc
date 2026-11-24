@@ -11,7 +11,7 @@
   <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
   <link rel="manifest" href="/favicon/site.webmanifest">
 
-  <!-- Página oculta: sem link em qualquer lugar do site e fora dos buscadores -->
+  <!-- Fora dos buscadores; o acesso é pelo link "Painel" do site -->
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="description" content="LED board of arrivals and departures — ADS-B data from the OpenSky Network.">
   <meta name="theme-color" content="#000000">
@@ -38,6 +38,13 @@
 
   <!-- ============ CONTROLES (canto inferior direito) ============ -->
   <div class="dock">
+    <a class="rbtn" href="/" aria-label="Voltar ao site" title="Voltar ao site">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 5l-7 7 7 7" />
+      </svg>
+    </a>
+
     <span class="dock-status" id="dockStatus" hidden>
       <span class="dock-label" id="recordLabel"></span>
       <span class="dock-counter" id="recordCounter"></span>
@@ -95,10 +102,6 @@
       <div class="cfg-title">Informações</div>
 
       <dl class="info-list">
-        <div class="info-row">
-          <dt>fonte</dt>
-          <dd data-info="source">—</dd>
-        </div>
         <div class="info-row">
           <dt>aeroporto</dt>
           <dd data-info="airport">—</dd>

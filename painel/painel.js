@@ -821,7 +821,6 @@
     var n = screens().length;
     var cur = currentScreen();
 
-    setInfo('source', (doc ? 'GET /api/sbfi/live' : 'GET /api/sbfi/live') + ' · ' + (ls ? ls.apiBase : API_BASE));
     setInfo('airport', ap
       ? [ap.icao, ap.iata, ap.name].filter(Boolean).join(' · ')
       : '—');
