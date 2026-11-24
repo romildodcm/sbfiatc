@@ -130,6 +130,96 @@ test('stale=true mantém a rodada e a idade da fonte', async () => {
   assert.equal(st.phase, 'ok');
 });
 
+/* ------------------- 200 sem voos vira empty --------------------- */
+
+test('200 com tela error e sem voo: mantém o erro antes dos 10 min', async () => {
+  const f = fakeFetch([{ status: 200, body: fixture('error.json') }]);
+  const { c, advance, state } = client(f);
+
+  await c.load();
+  assert.equal(state().live.screens[0].type, 'error');
+
+  advance(9 * 60_000);
+  await c.load();
+  assert.equal(state().live.screens[0].type, 'error', 'ainda dentro dos 10 min');
+  assert.ok(state().noFlightsSince > 0, 'a contagem começou na primeira leitura');
+});
+
+test('200 com tela error e sem voo por 10 min vira tela de sem voos', async () => {
+  const f = fakeFetch([{ status: 200, body: fixture('error.json') }]);
+  const { c, advance, state } = client(f);
+
+  await c.load();
+  const since = state().noFlightsSince;
+
+  advance(10 * 60_000);
+  await c.load();
+
+  const st = state();
+  assert.equal(st.noFlightsSince, since, 'a janela conta desde a primeira leitura sem voo');
+  assert.equal(st.live.screens.length, 1);
+  assert.equal(st.live.screens[0].type, 'empty');
+  assert.deepEqual(st.live.screens[0].lines, ['IGU / IGR / AGT', 'NO FLIGHTS', 'NO TRAFFIC']);
+  assert.match(st.live.screens[0].clock, /^\d{2}:\d{2}:\d{2}$/);
+  assert.equal(st.phase, 'ok', 'a API respondeu: não é falha de comunicação');
+  assert.equal(st.live.rotation.count, 1);
+
+  /* as leituras seguintes continuam sem voo: a tela não volta para o erro */
+  advance(10_000);
+  await c.load();
+  assert.equal(state().live.screens[0].type, 'empty');
+});
+
+test('o primeiro voo zera a contagem de sem voos', async () => {
+  const f = fakeFetch([
+    { status: 200, body: fixture('error.json') },
+    { status: 200, body: fixture('flight.json') }
+  ]);
+  const { c, advance, state } = client(f);
+
+  await c.load();
+  assert.ok(state().noFlightsSince > 0);
+
+  advance(10_000);
+  await c.load();
+  assert.equal(state().noFlightsSince, 0, 'voltou a ter voo');
+  assert.equal(state().live.screens[0].type, 'flight');
+});
+
+test('tela empty vinda do servidor não é reescrita nem conta tempo', async () => {
+  const f = fakeFetch([{ status: 200, body: fixture('empty.json') }]);
+  const { c, advance, state } = client(f);
+
+  await c.load();
+  assert.equal(state().noFlightsSince, 0);
+  assert.equal(state().live.screens[0].type, 'empty');
+
+  advance(11 * 60_000);
+  await c.load();
+  assert.equal(state().live.screens[0].type, 'empty');
+  assert.deepEqual(state().live.screens[0].lines, fixture('empty.json').screens[0].lines);
+});
+
+test('falha de rede reinicia a contagem: sem resposta não se conclui sem voos', async () => {
+  const booom = Object.assign(new Error('fetch failed'), { name: 'TypeError' });
+  const f = fakeFetch([
+    { status: 200, body: fixture('error.json') },
+    booom,
+    { status: 200, body: fixture('error.json') }
+  ]);
+  const { c, advance, state } = client(f);
+
+  await c.load();
+  advance(10_000);
+  await c.load();
+  assert.equal(state().errorKind, 'net');
+  assert.equal(state().noFlightsSince, 0, 'a falha zera a janela');
+
+  advance(10_000);
+  await c.load();
+  assert.equal(state().live.screens[0].type, 'error', 'a janela recomeça do zero');
+});
+
 test('429 não apaga a rodada anterior e respeita o Retry-After', async () => {
   const { c, advance, state } = client(fakeFetch([
     { status: 200, body: fixture('flight.json') },

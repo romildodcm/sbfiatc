@@ -20,6 +20,11 @@
      - 429 application/problem+json com RateLimit/Retry-After
      - sem dados ao vivo: uma tela 'error'; fonte parada: última resposta com stale=true
 
+   Regra local: se o endpoint responder 200 sem nenhum voo por 10 min seguidos,
+   o painel troca a tela de erro por "NO FLIGHTS" / "NO TRAFFIC" — aeroporto
+   sem tráfego não é falta de sinal. A contagem zera na primeira rodada com
+   voo (ou com tela 'empty' vinda do servidor).
+
    Sem dependência: roda no navegador (window.PainelLive) e no Node (module.exports).
    ========================================================================== */
 (function (root) {
@@ -33,6 +38,10 @@
   var MIN_INTERVAL_MS = 10000;
   var TIMEOUT_MS = 8000;
   var DEFAULT_PAGE_SECONDS = 30;
+
+  /* 200 com zero voos por esse tempo vira "sem tráfego", não "sem sinal" */
+  var NO_FLIGHTS_AFTER_MS = 10 * 60 * 1000;
+  var AREA_LABEL = 'IGU / IGR / AGT';
 
   function cleanBase(base) {
     return String(base || DEFAULT_API).replace(/\/+$/, '');
@@ -216,6 +225,55 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Sem voos                                                            */
+  /* ------------------------------------------------------------------ */
+
+  /* "hh:mm:ss" UTC do relógio da tela, como o servidor manda */
+  function clockOf(ms) {
+    var d = new Date(ms);
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds());
+  }
+
+  /* Rodada "sem voos" montada no cliente: a API responde 200 sem nenhum voo e
+     o operador precisa ver que o aeroporto está vazio, não que a fonte caiu.
+     A primeira linha vem da tela que o servidor mandou (rótulo de área), para
+     acompanhar a configuração do painel; o resto é fixo. */
+  function emptyRound(live, at) {
+    var area = live.screens[0] && live.screens[0].lines && live.screens[0].lines[0]
+      ? live.screens[0].lines[0]
+      : AREA_LABEL;
+
+    return {
+      generatedAt: live.generatedAt || at,
+      receivedAt: live.receivedAt,
+      windowMinutes: live.windowMinutes,
+      stale: live.stale,
+      staleAgeSeconds: live.staleAgeSeconds,
+      airport: live.airport,
+      rotation: { pageSeconds: live.rotation.pageSeconds, count: 1 },
+      logos: {},
+      screens: [{
+        type: 'empty',
+        index: 0,
+        reason: '',
+        lines: [area, 'NO FLIGHTS', 'NO TRAFFIC'],
+        /* o relógio da tela é o "agora" da leitura, como nas telas do servidor:
+           ele precisa andar a cada rodada, não congelar na transição */
+        clock: clockOf(at)
+      }]
+    };
+  }
+
+  function hasFlights(live) {
+    return live.screens.some(function (s) { return s.type === 'flight'; });
+  }
+
+  function hasEmptyScreen(live) {
+    return live.screens.some(function (s) { return s.type === 'empty'; });
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Cliente                                                             */
   /* ------------------------------------------------------------------ */
 
@@ -244,7 +302,8 @@
       error: '',                 // mensagem legível da última falha
       errorKind: '',             // 'net' | 'http' | 'rate' | 'server' | 'parse'
       status: 0,                 // HTTP da última resposta (0 = sem resposta)
-      retryAfterMs: 0
+      retryAfterMs: 0,
+      noFlightsSince: 0          // 200 sem voo desde este instante (0 = houve voo)
     };
 
     function notify() {
@@ -275,6 +334,23 @@
 
     function apply(doc, receivedAt) {
       var live = normalize(doc, receivedAt);
+
+      /* A API devolve 200 com uma tela 'error' quando não há voo nenhum na
+         janela. Zero voo não é "sem sinal": só depois de NO_FLIGHTS_AFTER_MS
+         seguidos sem voo o painel assume que o aeroporto está vazio. */
+      if (hasFlights(live)) {
+        st.noFlightsSince = 0;
+      } else if (hasEmptyScreen(live)) {
+        /* o servidor já disse "sem voos": nada a deduzir aqui */
+        st.noFlightsSince = 0;
+      } else {
+        var at = receivedAt || now();
+        if (!st.noFlightsSince) st.noFlightsSince = at;
+        if (at - st.noFlightsSince >= NO_FLIGHTS_AFTER_MS) {
+          live = emptyRound(live, at);
+        }
+      }
+
       st.live = live;
       st.phase = 'ok';
       st.error = '';
@@ -288,6 +364,8 @@
       st.error = message;
       st.status = status || 0;
       st.retryAfterMs = retryAfterMs || 0;
+      /* sem resposta não houve observação de "zero voos": a contagem reinicia */
+      st.noFlightsSince = 0;
       /* nunca apaga a última rodada boa: é o que a fonte parada quer dizer */
       if (!st.live) st.phase = 'error';
       notify();
@@ -437,6 +515,7 @@
       st.lastFetchAt = 0;
       st.nextFetchAt = 0;
       st.retryAfterMs = 0;
+      st.noFlightsSince = 0;
       logoCache = {};
       logoCount = 0;
       notify();

@@ -206,9 +206,13 @@ painel.js  state.live = PainelLive.getState()
    - Descrição: `drawError()` distingue boot (`STANDBY`), `429` (`TOO MANY TRIES` +
      `AGUARDE`), rede (`NO SIGNAL` + `API / NET`) e tela `error` do servidor (`lines`);
      `stale` não troca a rodada e aparece como linha `STALE <n>s` na tela de Informações.
+     Como a API hoje devolve `error`/`no-signal` também quando não há voo nenhum na
+     janela, o cliente conta o tempo em 200 sem voo e, após 10 min seguidos, troca a
+     tela por `empty` (`NO FLIGHTS` / `NO TRAFFIC`) — aeroporto vazio não é fonte caída.
    - Critérios de aceite: [ ] `?demo=stale` mantém o voo na tela com aviso na tela de
      Informações; [ ] `?demo=err-rate` mostra `TOO MANY TRIES`; [ ] `?demo=empty` mostra
-     `IGU / IGR / AGT` / `NO FLIGHTS` / `NO TRAFFIC` + relógio UTC.
+     `IGU / IGR / AGT` / `NO FLIGHTS` / `NO TRAFFIC` + relógio UTC;
+     [ ] 10 min de `error` sem voo viram `empty`, e o primeiro voo volta a `flight`.
    - Depende de: 3
 
 6. **[Task] Tela "Informações" (configurações vira só leitura) + HTML/SW/versão**
